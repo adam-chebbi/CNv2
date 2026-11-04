@@ -481,11 +481,137 @@ CREATE TABLE IF NOT EXISTS feedback (
 );
 `;
 
+const CUSTOMERS = `
+-- ---------------------------------------------------------------- Comptes clients (§11)
+-- Optional accounts, fully separate from staff accounts (own table, own cookie, own routes).
+CREATE TABLE IF NOT EXISTS customers (
+  id TEXT PRIMARY KEY,
+  first_name TEXT NOT NULL,
+  last_name TEXT NOT NULL,
+  email TEXT NOT NULL UNIQUE,
+  phone TEXT,
+  password_hash TEXT,
+  preferences TEXT,
+  birthday TEXT,
+  marketing_consent INTEGER NOT NULL DEFAULT 0,
+  status TEXT NOT NULL CHECK (status IN ('active', 'closed')),
+  failed_attempts INTEGER NOT NULL DEFAULT 0,
+  locked_until TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  closed_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_customers_phone ON customers(phone);
+
+CREATE TABLE IF NOT EXISTS customer_sessions (
+  token_hash TEXT PRIMARY KEY,
+  customer_id TEXT NOT NULL REFERENCES customers(id),
+  created_at TEXT NOT NULL,
+  last_seen_at TEXT NOT NULL,
+  revoked_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS customer_password_resets (
+  token_hash TEXT PRIMARY KEY,
+  customer_id TEXT NOT NULL REFERENCES customers(id),
+  created_at TEXT NOT NULL,
+  expires_at TEXT NOT NULL,
+  used_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS customer_favorites (
+  id TEXT PRIMARY KEY,
+  customer_id TEXT NOT NULL REFERENCES customers(id),
+  article_id TEXT NOT NULL,
+  variant_id TEXT,
+  extra_ids TEXT NOT NULL DEFAULT '[]',
+  created_at TEXT NOT NULL
+);
+
+-- ---------------------------------------------------------------- Fidélité (§12)
+CREATE TABLE IF NOT EXISTS loyalty_rewards (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  points_cost INTEGER NOT NULL CHECK (points_cost > 0),
+  kind TEXT NOT NULL CHECK (kind IN ('fixed', 'percent', 'product')),
+  value INTEGER NOT NULL DEFAULT 0,
+  article_id TEXT,
+  active INTEGER NOT NULL DEFAULT 1,
+  created_by TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT
+);
+
+-- Points are a ledger (earn, redeem, expire, adjust, reverse), never a counter edited in place.
+CREATE TABLE IF NOT EXISTS loyalty_ledger (
+  id TEXT PRIMARY KEY,
+  customer_id TEXT NOT NULL REFERENCES customers(id),
+  type TEXT NOT NULL CHECK (type IN ('earn', 'redeem', 'expire', 'adjust', 'reverse', 'restore')),
+  points INTEGER NOT NULL,
+  sale_id TEXT,
+  reward_id TEXT,
+  reason TEXT,
+  expires_at TEXT,
+  expired INTEGER NOT NULL DEFAULT 0,
+  created_by TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+-- A sale credits points once, to one account (§12.2).
+CREATE UNIQUE INDEX IF NOT EXISTS idx_loyalty_one_earn_per_sale ON loyalty_ledger(sale_id) WHERE type = 'earn';
+CREATE INDEX IF NOT EXISTS idx_loyalty_ledger_customer ON loyalty_ledger(customer_id);
+
+-- Rewards applied to an open bill; turned into a 'redeem' entry when the sale is settled.
+CREATE TABLE IF NOT EXISTS sale_rewards (
+  sale_id TEXT NOT NULL REFERENCES pos_sales(id),
+  reward_id TEXT NOT NULL REFERENCES loyalty_rewards(id),
+  customer_id TEXT NOT NULL,
+  points_cost INTEGER NOT NULL,
+  applied_by TEXT NOT NULL,
+  applied_at TEXT NOT NULL,
+  PRIMARY KEY (sale_id, reward_id)
+);
+
+-- ---------------------------------------------------------------- Réservations (§9)
+CREATE TABLE IF NOT EXISTS reservations (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  phone TEXT NOT NULL,
+  email TEXT,
+  date TEXT NOT NULL,
+  time TEXT NOT NULL,
+  duration_min INTEGER NOT NULL,
+  people INTEGER NOT NULL CHECK (people > 0),
+  comment TEXT,
+  status TEXT NOT NULL CHECK (status IN ('pending', 'confirmed', 'rejected', 'cancelled', 'arrived', 'no_show', 'completed')),
+  table_id TEXT REFERENCES dining_tables(id),
+  customer_id TEXT,
+  source TEXT NOT NULL CHECK (source IN ('online', 'phone', 'walk_in')),
+  change_request TEXT,
+  decision_note TEXT,
+  visit_id TEXT,
+  created_by TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_reservations_date ON reservations(date);
+
+CREATE TABLE IF NOT EXISTS reservation_events (
+  id TEXT PRIMARY KEY,
+  reservation_id TEXT NOT NULL REFERENCES reservations(id),
+  from_status TEXT,
+  to_status TEXT NOT NULL,
+  note TEXT,
+  created_by TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+`;
+
 export const applyPosSchema = (db: Db): void => {
   applyFoundation(db);
   db.exec(CATALOG);
   db.exec(SERVICE);
   db.exec(CUSTOMER_SERVICES);
+  db.exec(CUSTOMERS);
   // A register exists out of the box; more can be added from the settings.
   const hasRegister = db.prepare('SELECT 1 FROM cash_registers LIMIT 1').get();
   if (!hasRegister) {
