@@ -31,6 +31,9 @@ export const POS_PAGES: PosPageDef[] = [
 ];
 
 export const POS_ADMIN_PAGES: PosPageDef[] = [
+  { id: 'pos_dashboard', label: 'Tableau de bord direction', permission: 'dashboard:view', component: page(() => import('./DirectionPages'), 'DirectionDashboardPage') },
+  { id: 'pos_sales_report', label: 'Rapport des ventes', permission: 'reports:view', component: page(() => import('./DirectionPages'), 'SalesReportPage') },
+  { id: 'pos_journal', label: 'Journal détaillé', permission: 'activity_log:view', component: page(() => import('./DirectionPages'), 'JournalPage') },
   { id: 'pos_floor_editor', label: 'Plan de salle & QR codes', permission: 'floor:manage', component: page(() => import('./FloorEditorPage'), 'FloorEditorPage') },
   { id: 'pos_menu', label: 'Carte & disponibilités', permission: 'products:manage', component: page(() => import('./MenuSettingsPage'), 'MenuSettingsPage') },
   { id: 'pos_consumption', label: 'Fiche de consommation', permission: 'stock:view', component: page(() => import('./ConsumptionPage'), 'ConsumptionPage') },
