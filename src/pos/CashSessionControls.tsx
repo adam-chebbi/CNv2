@@ -5,6 +5,9 @@ import { CASH_DENOMINATIONS, countedTotal, PAYMENT_METHOD_LABELS, type PaymentMe
 import { formatDt, parseDtInput } from '../data/money';
 import { newIdempotencyKey } from '../hooks/usePosEvents';
 import { posApi, type CashSessionDetail } from './api';
+import { getExpenses } from '../api/expenses';
+import type { Expense } from '../data/expensesModel';
+import { toMillimes } from '../data/money';
 import { Btn, cx, ErrorNote, Field, inputCls, Modal, Money, useAction } from './ui';
 
 // Ouverture, mouvements d'espèces et clôture de la caisse (cahier des charges §2.7 – §2.9).
@@ -105,9 +108,27 @@ export const MovementModal: React.FC<{ session: CashSessionDetail; onClose: () =
   const [amount, setAmount] = useState('');
   const [reason, setReason] = useState('');
   const [comment, setComment] = useState('');
+  const [expenseId, setExpenseId] = useState('');
+  const [expenses, setExpenses] = useState<Expense[]>([]);
   const [key] = useState(newIdempotencyKey);
   const { busy, error, run } = useAction();
+  const { hasPermission } = useAuth();
   const mil = parseDtInput(amount);
+  // A cash-out for an expense already entered in Dépenses is linked to it instead of creating a
+  // second one (§2.8). Only the last 7 days, and only for users who can see expenses.
+  useEffect(() => {
+    if (!hasPermission('expenses:view')) return;
+    const since = new Date(Date.now() - 7 * 86_400_000).toISOString().slice(0, 10);
+    void getExpenses().then((list) => setExpenses(list.filter((e) => e.date >= since && e.status !== 'Rejeté'))).catch(() => setExpenses([]));
+  }, [hasPermission]);
+  const pickExpense = (id: string) => {
+    setExpenseId(id);
+    const e = expenses.find((x) => x.id === id);
+    if (e) {
+      setAmount(formatDt(toMillimes(e.amount), false));
+      if (!reason.trim()) setReason(e.title);
+    }
+  };
   return (
     <Modal
       title="Mouvement d'espèces"
@@ -119,7 +140,7 @@ export const MovementModal: React.FC<{ session: CashSessionDetail; onClose: () =
             variant="primary"
             busy={busy}
             disabled={!mil || mil <= 0 || !reason.trim()}
-            onClick={() => run(async () => onDone(await posApi.movement(session.id, { type, amountMil: mil!, reason: reason.trim(), comment: comment.trim() || undefined }, key)))}
+            onClick={() => run(async () => onDone(await posApi.movement(session.id, { type, amountMil: mil!, reason: reason.trim(), comment: comment.trim() || undefined, expenseId: type === 'out' && expenseId ? expenseId : undefined }, key)))}
           >
             Enregistrer
           </Btn>
@@ -135,6 +156,14 @@ export const MovementModal: React.FC<{ session: CashSessionDetail; onClose: () =
           <ArrowUpCircle size={18} /> Sortie
         </button>
       </div>
+      {type === 'out' && expenses.length > 0 && (
+        <Field label="Dépense déjà saisie (facultatif)" hint="Liée au mouvement : aucune nouvelle dépense n'est créée.">
+          <select className={inputCls} value={expenseId} onChange={(e) => pickExpense(e.target.value)}>
+            <option value="">— Aucune —</option>
+            {expenses.map((e) => <option key={e.id} value={e.id}>{e.date} · {e.title} · {formatDt(toMillimes(e.amount))}</option>)}
+          </select>
+        </Field>
+      )}
       <Field label="Montant (DT)">
         <input className={inputCls} inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} />
       </Field>

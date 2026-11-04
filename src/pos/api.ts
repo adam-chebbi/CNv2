@@ -58,7 +58,7 @@ export const posApi = {
   session: (id: string) => apiGet<CashSessionDetail>(`/pos/cash-sessions/${id}`),
   openSession: (registerId: string, openingFloatMil: number, comment: string, key: string) =>
     apiPostOnce<CashSessionDetail>('/pos/cash-sessions', { registerId, openingFloatMil, comment: comment || undefined }, key),
-  movement: (sessionId: string, m: { type: 'in' | 'out'; amountMil: number; reason: string; comment?: string }, key: string) =>
+  movement: (sessionId: string, m: { type: 'in' | 'out'; amountMil: number; reason: string; comment?: string; expenseId?: string }, key: string) =>
     apiPostOnce<CashSessionDetail>(`/pos/cash-sessions/${sessionId}/movements`, m, key),
   closeSession: (sessionId: string, body: { countedCashMil?: number; counts?: Record<string, number>; comment?: string }, key: string) =>
     apiPostOnce<CashSessionDetail>(`/pos/cash-sessions/${sessionId}/close`, body, key),
