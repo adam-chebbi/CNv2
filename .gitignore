@@ -15,3 +15,8 @@ server/data/*.sqlite3-shm
 docs/
 Cahier des charges*.pdf
 docs-site/public/screenshots/screenshots.zip
+
+# Markdown and PDF documents stay local — only READMEs are versioned
+*.md
+!README.md
+*.pdf
