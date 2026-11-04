@@ -35,6 +35,7 @@ export const POS_ADMIN_PAGES: PosPageDef[] = [
   { id: 'pos_menu', label: 'Carte & disponibilités', permission: 'products:manage', component: page(() => import('./MenuSettingsPage'), 'MenuSettingsPage') },
   { id: 'pos_consumption', label: 'Fiche de consommation', permission: 'stock:view', component: page(() => import('./ConsumptionPage'), 'ConsumptionPage') },
   { id: 'pos_offers', label: 'Réductions & offres', permission: 'offers:manage', component: page(() => import('./OffersPage'), 'OffersPage') },
+  { id: 'pos_equipment', label: 'Machines & amortissement', permission: 'equipment:view', component: page(() => import('./EquipmentPage'), 'EquipmentPage') },
   { id: 'pos_customers', label: 'Clients', permission: 'customers:view', component: page(() => import('./CustomersPage'), 'CustomersPage') },
   { id: 'pos_loyalty', label: 'Fidélité', permission: 'loyalty:manage', component: page(() => import('./LoyaltyPage'), 'LoyaltyPage') },
   { id: 'pos_feedback', label: 'FAQ & avis clients', permission: 'feedback:manage', component: page(() => import('./FaqFeedbackPage'), 'FaqFeedbackPage') },
