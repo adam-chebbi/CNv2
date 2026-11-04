@@ -120,7 +120,304 @@ BEGIN
 END;
 `;
 
+const SERVICE = `
+-- ---------------------------------------------------------------- Caisse (sessions & espèces)
+CREATE TABLE IF NOT EXISTS cash_registers (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL UNIQUE,
+  active INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS cash_sessions (
+  id TEXT PRIMARY KEY,
+  register_id TEXT NOT NULL REFERENCES cash_registers(id),
+  status TEXT NOT NULL CHECK (status IN ('open', 'closed')),
+  opened_by_id TEXT NOT NULL,
+  opened_by TEXT NOT NULL,
+  opened_at TEXT NOT NULL,
+  opening_float_mil INTEGER NOT NULL CHECK (opening_float_mil >= 0),
+  opening_comment TEXT,
+  closed_by_id TEXT,
+  closed_by TEXT,
+  closed_at TEXT,
+  expected_cash_mil INTEGER,
+  counted_cash_mil INTEGER,
+  difference_mil INTEGER,
+  closing_comment TEXT,
+  counts_json TEXT,
+  summary_json TEXT
+);
+-- One open session per register at a time.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_cash_sessions_one_open ON cash_sessions(register_id) WHERE status = 'open';
+
+CREATE TABLE IF NOT EXISTS cash_movements (
+  id TEXT PRIMARY KEY,
+  session_id TEXT NOT NULL REFERENCES cash_sessions(id),
+  type TEXT NOT NULL CHECK (type IN ('in', 'out')),
+  amount_mil INTEGER NOT NULL CHECK (amount_mil > 0),
+  reason TEXT NOT NULL,
+  comment TEXT,
+  expense_id TEXT,
+  created_by_id TEXT NOT NULL,
+  created_by TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+
+-- A closed session is never edited: a correction is a new row next to the original count.
+CREATE TABLE IF NOT EXISTS cash_session_corrections (
+  id TEXT PRIMARY KEY,
+  session_id TEXT NOT NULL REFERENCES cash_sessions(id),
+  counted_before_mil INTEGER NOT NULL,
+  counted_after_mil INTEGER NOT NULL,
+  reason TEXT NOT NULL,
+  created_by_id TEXT NOT NULL,
+  created_by TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+
+-- ---------------------------------------------------------------- Salle, tables, carrés
+CREATE TABLE IF NOT EXISTS floor_areas (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  sort INTEGER NOT NULL DEFAULT 0,
+  archived_at TEXT,
+  created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS dining_tables (
+  id TEXT PRIMARY KEY,
+  area_id TEXT NOT NULL REFERENCES floor_areas(id),
+  name TEXT NOT NULL,
+  shape TEXT NOT NULL DEFAULT 'square' CHECK (shape IN ('round', 'square', 'rect')),
+  capacity INTEGER NOT NULL DEFAULT 2 CHECK (capacity > 0),
+  x INTEGER NOT NULL DEFAULT 40,
+  y INTEGER NOT NULL DEFAULT 40,
+  width INTEGER NOT NULL DEFAULT 80,
+  height INTEGER NOT NULL DEFAULT 80,
+  rotation INTEGER NOT NULL DEFAULT 0,
+  qr_token TEXT NOT NULL UNIQUE,
+  qr_checked_at TEXT,
+  archived_at TEXT,
+  created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS sections (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  color TEXT NOT NULL DEFAULT '#10b981',
+  archived_at TEXT,
+  created_at TEXT NOT NULL
+);
+
+-- A table belongs to at most one section.
+CREATE TABLE IF NOT EXISTS section_tables (
+  table_id TEXT PRIMARY KEY REFERENCES dining_tables(id),
+  section_id TEXT NOT NULL REFERENCES sections(id)
+);
+
+-- History of who serves a section: ends_at NULL = current assignment.
+CREATE TABLE IF NOT EXISTS section_assignments (
+  id TEXT PRIMARY KEY,
+  section_id TEXT NOT NULL REFERENCES sections(id),
+  waiter_id TEXT NOT NULL,
+  waiter_name TEXT NOT NULL,
+  starts_at TEXT NOT NULL,
+  ends_at TEXT,
+  assigned_by TEXT NOT NULL,
+  previous_waiter_name TEXT
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_section_assignment_current ON section_assignments(section_id) WHERE ends_at IS NULL;
+
+-- One occupation of a table, from opening to release.
+CREATE TABLE IF NOT EXISTS visits (
+  id TEXT PRIMARY KEY,
+  table_id TEXT NOT NULL REFERENCES dining_tables(id),
+  status TEXT NOT NULL CHECK (status IN ('open', 'closed')),
+  opened_at TEXT NOT NULL,
+  opened_by_id TEXT NOT NULL,
+  opened_by TEXT NOT NULL,
+  covers INTEGER CHECK (covers IS NULL OR covers > 0),
+  join_code TEXT NOT NULL,
+  join_failures INTEGER NOT NULL DEFAULT 0,
+  primary_waiter_id TEXT,
+  primary_waiter_name TEXT,
+  reservation_id TEXT,
+  closed_at TEXT,
+  closed_by TEXT
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_visits_one_open_per_table ON visits(table_id) WHERE status = 'open';
+
+-- Phones that joined a visit with its code (QR ordering). Only a hash of the token is kept.
+CREATE TABLE IF NOT EXISTS visit_devices (
+  id TEXT PRIMARY KEY,
+  visit_id TEXT NOT NULL REFERENCES visits(id),
+  token_hash TEXT NOT NULL UNIQUE,
+  customer_id TEXT,
+  created_at TEXT NOT NULL,
+  revoked_at TEXT
+);
+
+-- ---------------------------------------------------------------- Ventes, commandes, règlements
+-- A sale is a bill: a counter sale, or everything a table visit consumed until it is settled.
+-- It receives its ticket number when fully paid.
+CREATE TABLE IF NOT EXISTS pos_sales (
+  id TEXT PRIMARY KEY,
+  ticket_number TEXT UNIQUE,
+  status TEXT NOT NULL CHECK (status IN ('open', 'completed', 'cancelled')),
+  service_type TEXT NOT NULL CHECK (service_type IN ('dine_in', 'takeaway')),
+  visit_id TEXT REFERENCES visits(id),
+  table_name TEXT,
+  customer_id TEXT,
+  session_id TEXT REFERENCES cash_sessions(id),
+  manual_discount_json TEXT,
+  ticket_discounts_json TEXT NOT NULL DEFAULT '[]',
+  gross_mil INTEGER NOT NULL DEFAULT 0,
+  discount_mil INTEGER NOT NULL DEFAULT 0,
+  total_mil INTEGER NOT NULL DEFAULT 0,
+  paid_mil INTEGER NOT NULL DEFAULT 0,
+  vat_json TEXT NOT NULL DEFAULT '[]',
+  created_by_id TEXT NOT NULL,
+  created_by TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  completed_by TEXT,
+  completed_at TEXT,
+  reprint_count INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_pos_sales_visit ON pos_sales(visit_id);
+CREATE INDEX IF NOT EXISTS idx_pos_sales_completed ON pos_sales(completed_at);
+
+CREATE TABLE IF NOT EXISTS pos_orders (
+  id TEXT PRIMARY KEY,
+  order_number INTEGER NOT NULL UNIQUE,
+  sale_id TEXT REFERENCES pos_sales(id),
+  visit_id TEXT REFERENCES visits(id),
+  channel TEXT NOT NULL CHECK (channel IN ('counter', 'staff', 'qr')),
+  service_type TEXT NOT NULL CHECK (service_type IN ('dine_in', 'takeaway')),
+  status TEXT NOT NULL CHECK (status IN ('pending_validation', 'awaiting_customer', 'validated', 'rejected', 'cancelled')),
+  customer_id TEXT,
+  device_id TEXT,
+  note TEXT,
+  sent_total_mil INTEGER NOT NULL DEFAULT 0,
+  change_request TEXT,
+  rejection_reason TEXT,
+  created_by_id TEXT,
+  created_by TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  validated_by_id TEXT,
+  validated_by TEXT,
+  validated_at TEXT,
+  updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_pos_orders_visit ON pos_orders(visit_id);
+CREATE INDEX IF NOT EXISTS idx_pos_orders_status ON pos_orders(status);
+
+-- Lines copy name, prices, options and VAT at validation: a later catalogue change never alters them.
+CREATE TABLE IF NOT EXISTS pos_order_lines (
+  id TEXT PRIMARY KEY,
+  order_id TEXT NOT NULL REFERENCES pos_orders(id),
+  position INTEGER NOT NULL,
+  article_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  display_name TEXT NOT NULL,
+  category TEXT NOT NULL,
+  quantity INTEGER NOT NULL CHECK (quantity > 0),
+  variant_json TEXT,
+  extras_json TEXT NOT NULL DEFAULT '[]',
+  instruction TEXT,
+  unit_price_mil INTEGER NOT NULL,
+  options_price_mil INTEGER NOT NULL,
+  gross_mil INTEGER NOT NULL,
+  item_discounts_json TEXT NOT NULL DEFAULT '[]',
+  item_discount_mil INTEGER NOT NULL DEFAULT 0,
+  vat_rate REAL NOT NULL,
+  prep_destination TEXT NOT NULL CHECK (prep_destination IN ('kitchen', 'bar', 'none')),
+  prep_status TEXT NOT NULL DEFAULT 'none' CHECK (prep_status IN ('none', 'to_prepare', 'in_progress', 'ready', 'served')),
+  prep_ticket_id TEXT,
+  responsible_waiter_id TEXT,
+  responsible_waiter_name TEXT,
+  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'cancelled', 'refused')),
+  created_at TEXT NOT NULL,
+  sent_to_prep_at TEXT,
+  prep_started_at TEXT,
+  ready_at TEXT,
+  served_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_pos_order_lines_order ON pos_order_lines(order_id);
+CREATE INDEX IF NOT EXISTS idx_pos_order_lines_prep ON pos_order_lines(prep_destination, prep_status);
+
+-- One batch sent to one station (kitchen or bar) by one validation.
+CREATE TABLE IF NOT EXISTS prep_tickets (
+  id TEXT PRIMARY KEY,
+  order_id TEXT NOT NULL REFERENCES pos_orders(id),
+  destination TEXT NOT NULL CHECK (destination IN ('kitchen', 'bar')),
+  label TEXT NOT NULL,
+  sent_at TEXT NOT NULL,
+  UNIQUE (order_id, destination)
+);
+
+-- Payments and refunds (negative amount). amount_mil = what settles the bill; for cash, the
+-- change given back is recorded apart (tendered = amount + change).
+CREATE TABLE IF NOT EXISTS pos_payments (
+  id TEXT PRIMARY KEY,
+  sale_id TEXT NOT NULL REFERENCES pos_sales(id),
+  session_id TEXT NOT NULL REFERENCES cash_sessions(id),
+  method TEXT NOT NULL CHECK (method IN ('cash', 'card', 'voucher')),
+  kind TEXT NOT NULL DEFAULT 'payment' CHECK (kind IN ('payment', 'refund')),
+  amount_mil INTEGER NOT NULL,
+  tendered_mil INTEGER,
+  change_mil INTEGER NOT NULL DEFAULT 0,
+  note TEXT,
+  created_by_id TEXT NOT NULL,
+  created_by TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_pos_payments_session ON pos_payments(session_id);
+CREATE INDEX IF NOT EXISTS idx_pos_payments_sale ON pos_payments(sale_id);
+
+-- Annulations à double validation (§7): requested by one person, decided by another. Nothing is
+-- removed until approval; every request stays on record with its decision.
+CREATE TABLE IF NOT EXISTS cancellation_requests (
+  id TEXT PRIMARY KEY,
+  target_type TEXT NOT NULL CHECK (target_type IN ('line', 'order', 'visit')),
+  target_id TEXT NOT NULL,
+  visit_id TEXT,
+  sale_id TEXT,
+  description TEXT NOT NULL,
+  amount_mil INTEGER NOT NULL DEFAULT 0,
+  prep_status_at_request TEXT,
+  reason TEXT NOT NULL,
+  status TEXT NOT NULL CHECK (status IN ('pending', 'approved', 'rejected')),
+  requester_id TEXT NOT NULL,
+  requester_name TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  decided_by_id TEXT,
+  decided_by TEXT,
+  decided_at TEXT,
+  decision_note TEXT,
+  stock_treatment TEXT CHECK (stock_treatment IS NULL OR stock_treatment IN ('restored', 'loss', 'offered', 'prep_error', 'other')),
+  stock_note TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_cancellation_requests_status ON cancellation_requests(status);
+-- One pending request per target at a time.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_cancellation_one_pending ON cancellation_requests(target_type, target_id) WHERE status = 'pending';
+
+CREATE TABLE IF NOT EXISTS pos_ticket_prints (
+  id TEXT PRIMARY KEY,
+  sale_id TEXT NOT NULL REFERENCES pos_sales(id),
+  duplicate INTEGER NOT NULL,
+  printed_by TEXT NOT NULL,
+  printed_at TEXT NOT NULL
+);
+`;
+
 export const applyPosSchema = (db: Db): void => {
   applyFoundation(db);
   db.exec(CATALOG);
+  db.exec(SERVICE);
+  // A register exists out of the box; more can be added from the settings.
+  const hasRegister = db.prepare('SELECT 1 FROM cash_registers LIMIT 1').get();
+  if (!hasRegister) {
+    db.prepare('INSERT INTO cash_registers (id, name, active, created_at) VALUES (?, ?, 1, ?)').run('register-main', 'Caisse principale', new Date().toISOString());
+  }
 };

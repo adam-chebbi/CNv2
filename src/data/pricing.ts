@@ -266,7 +266,6 @@ export const priceLine = (input: CartLineInput, catalog: PricingCatalog): Omit<P
 export const computeCart = (inputs: CartLineInput[], catalog: PricingCatalog, discounts: DiscountRule[], context: CartContext): PricedCart => {
   const active = discounts.filter((d) => isDiscountActiveAt(d, context.now, context.customerId));
   const itemOffers = active.filter((d) => d.scope === 'items');
-  const ticketOffers = active.filter((d) => d.scope === 'ticket');
 
   // 1. Lines and their item-level offers.
   const lines = inputs.map((input) => {
@@ -287,7 +286,20 @@ export const computeCart = (inputs: CartLineInput[], catalog: PricingCatalog, di
     return { ...base, discounts: applied, ticketDiscountMil: 0, totalMil: afterItems };
   });
 
-  // 2. Ticket-level offers, then the manual discount, then externally decided discounts.
+  return applyTicketDiscounts(lines, discounts, context);
+};
+
+// Ticket-level offers, then the manual discount, then externally decided discounts (loyalty), on
+// lines whose item-level price is already fixed. Used by computeCart for a new cart, and on its
+// own to recompute a table bill from lines frozen at validation — the catalogue is never re-read
+// for a validated line.
+export const applyTicketDiscounts = (
+  pricedLines: PricedLine[],
+  ticketRules: DiscountRule[],
+  context: CartContext
+): PricedCart => {
+  const lines = pricedLines.map((l) => ({ ...l, totalMil: l.grossMil - l.discounts.reduce((s, d) => s + d.amountMil, 0), ticketDiscountMil: 0 }));
+  const ticketOffers = ticketRules.filter((d) => d.scope === 'ticket' && isDiscountActiveAt(d, context.now, context.customerId));
   const subtotal = lines.reduce((s, l) => s + l.totalMil, 0);
   const ticketCandidates: AppliedDiscount[] = [];
   const ticketStackable: boolean[] = [];
@@ -319,7 +331,7 @@ export const computeCart = (inputs: CartLineInput[], catalog: PricingCatalog, di
     }
   });
 
-  // 3. Each line carries its share of the ticket discounts (needed for VAT and per-line revenue).
+  // Each line carries its share of the ticket discounts (needed for VAT and per-line revenue).
   const ticketTotal = ticketDiscounts.reduce((s, d) => s + d.amountMil, 0);
   const shares = allocateProportionally(ticketTotal, lines.map((l) => l.totalMil));
   lines.forEach((line, i) => {

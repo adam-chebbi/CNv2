@@ -25,6 +25,10 @@ import { bootstrapRbac } from './rbac/bootstrap.js';
 import { errorMiddleware } from './middleware/errors.js';
 import { eventsRouter } from './lib/events.js';
 import { posCatalogRouter } from './routes/posCatalog.js';
+import { cashSessionsRouter } from './routes/cashSessions.js';
+import { posSalesRouter } from './routes/posSales.js';
+import { floorRouter } from './routes/floor.js';
+import { prepRouter } from './routes/prep.js';
 import { purgeOldIdempotencyKeys } from './lib/idempotency.js';
 import { ensureCsrfCookie, csrfProtection } from './middleware/csrf.js';
 
@@ -86,6 +90,10 @@ export const createApp = (): express.Express => {
 
   // Point of sale (caisse, salle, commandes, préparation, clients).
   app.use('/api/pos', posCatalogRouter);
+  app.use('/api/pos', cashSessionsRouter);
+  app.use('/api/pos', posSalesRouter);
+  app.use('/api/pos', floorRouter);
+  app.use('/api/pos', prepRouter);
 
   app.use(errorMiddleware);
 

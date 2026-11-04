@@ -37,8 +37,8 @@ test('availability is synchronised with the public menu and the V1 flag', async 
   const res = await cashier.patch(`/api/pos/catalog/articles/${cap.id}`, { availability: 'unavailable' });
   assert.equal(res.status, 200);
   assert.equal(res.body.availability, 'unavailable');
-  const publicMenu = await fetch(`${ctx.baseUrl}/api/products`).then((r) => r.json());
-  assert.ok(!publicMenu.products.some((p: { id: string }) => p.id === cap.id));
+  const publicMenu = (await fetch(`${ctx.baseUrl}/api/products`).then((r) => r.json())) as { products: { id: string }[] };
+  assert.ok(!publicMenu.products.some((p) => p.id === cap.id));
   const flag = ctx.db.prepare('SELECT is_available FROM catalog_articles WHERE id = ?').get(cap.id) as { is_available: number };
   assert.equal(flag.is_available, 0);
 
