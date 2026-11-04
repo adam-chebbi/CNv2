@@ -18,6 +18,13 @@ export interface PosPageDef {
 
 export const POS_PAGES: PosPageDef[] = [
   { id: 'pos_register', label: 'Caisse', permission: 'pos:sell', component: page(() => import('./RegisterPage'), 'RegisterPage') },
+  { id: 'pos_floor', label: 'Plan de salle', permission: 'floor:view', component: page(() => import('./FloorPage'), 'FloorPage') },
+  { id: 'pos_actions', label: 'Actions à traiter', permission: 'actions:view', component: page(() => import('./ActionsPage'), 'ActionsPage') },
+  { id: 'pos_kitchen', label: 'Écran cuisine', permission: 'prep:kitchen', component: page(() => import('./PrepBoardPage'), 'KitchenBoardPage') },
+  { id: 'pos_bar', label: 'Écran bar', permission: 'prep:bar', component: page(() => import('./PrepBoardPage'), 'BarBoardPage') },
+  { id: 'pos_cancellations', label: 'Annulations', permission: 'cancel:request', component: page(() => import('./CancellationsPage'), 'CancellationsPage') },
+  { id: 'pos_tickets', label: 'Tickets', permission: 'pos:history', component: page(() => import('./TicketsPage'), 'TicketsPage') },
+  { id: 'pos_sessions', label: 'Sessions de caisse', permission: 'cash:view', component: page(() => import('./SessionsHistoryPage'), 'SessionsHistoryPage') },
 ];
 
 export const POS_ADMIN_PAGES: PosPageDef[] = [];
