@@ -18,12 +18,14 @@ const getCsrfToken = (): string | null => {
 interface RequestOptions {
   method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
   body?: unknown;
+  idempotencyKey?: string;
 }
 
 const request = async <T,>(path: string, options: RequestOptions = {}): Promise<T> => {
   const method = options.method ?? 'GET';
   const headers: Record<string, string> = {};
   if (options.body !== undefined) headers['Content-Type'] = 'application/json';
+  if (options.idempotencyKey) headers['Idempotency-Key'] = options.idempotencyKey;
   if (method !== 'GET') {
     const csrfToken = getCsrfToken();
     if (csrfToken) headers[CSRF_HEADER] = csrfToken;
@@ -54,3 +56,8 @@ export const apiPost = <T,>(path: string, body?: unknown): Promise<T> => request
 export const apiPut = <T,>(path: string, body?: unknown): Promise<T> => request<T>(path, { method: 'PUT', body });
 export const apiPatch = <T,>(path: string, body?: unknown): Promise<T> => request<T>(path, { method: 'PATCH', body });
 export const apiDelete = <T,>(path: string): Promise<T> => request<T>(path, { method: 'DELETE' });
+
+// For actions that must never be applied twice (send an order, collect a payment…): the caller
+// keeps the same key across retries of one intention — see newIdempotencyKey in usePosEvents.ts.
+export const apiPostOnce = <T,>(path: string, body: unknown, idempotencyKey: string): Promise<T> =>
+  request<T>(path, { method: 'POST', body, idempotencyKey });

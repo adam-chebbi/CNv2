@@ -43,6 +43,11 @@ export const MANAGE_ROLES_PERMISSION = 'roles:manage';
 // lets a user in only if their role carries this key (or they are Super Admin).
 export const HISTORIQUE_ACCESS_PERMISSION = 'historique:access';
 export const GERANT_ROLE_NAME = 'Gérant';
+export const DIRECTION_ROLE_NAME = 'Direction';
+export const CAISSE_ROLE_NAME = 'Caisse';
+export const SERVEUR_ROLE_NAME = 'Serveur';
+export const CUISINE_ROLE_NAME = 'Cuisine';
+export const BAR_ROLE_NAME = 'Bar';
 export const HISTORIQUE_URL = 'https://historique.cafenoir.tn';
 
 export interface PermissionDef {
@@ -124,6 +129,55 @@ export const PERMISSIONS: PermissionDef[] = [
   { key: 'historique:supervise', module: 'historique', moduleLabel: 'Historique & Comptage', label: 'Superviser', description: 'Corriger la caisse de n’importe quelle date passée (sans cette permission, seuls les 3 derniers jours sont modifiables).', sensitive: true },
   { key: 'historique:settings', module: 'historique', moduleLabel: 'Historique & Comptage', label: 'Paramétrer', description: 'Réservé aux réglages futurs de l’application Historique.', sensitive: true },
 
+  // --- Caisse (point de vente) ----------------------------------------------------------------
+  { key: 'pos:sell', module: 'pos', moduleLabel: 'Caisse', label: 'Vendre', description: "Utiliser l'écran de caisse : composer une vente au comptoir, sur place ou à emporter." },
+  { key: 'pos:collect', module: 'pos', moduleLabel: 'Caisse', label: 'Encaisser', description: "Enregistrer les règlements (espèces, TPE, ticket restaurant) d'une vente ou d'une addition." },
+  { key: 'pos:discount', module: 'pos', moduleLabel: 'Caisse', label: 'Remise manuelle', description: 'Appliquer une remise manuelle sur un ticket (dans la limite du plafond paramétré).', sensitive: true },
+  { key: 'pos:history', module: 'pos', moduleLabel: 'Caisse', label: 'Historique des tickets', description: 'Rechercher et consulter les tickets (numéro, date, table).' },
+  { key: 'pos:reprint', module: 'pos', moduleLabel: 'Caisse', label: 'Réimprimer', description: 'Réimprimer un ticket (duplicata, sans créer de vente).' },
+  { key: 'pos:correct', module: 'pos', moduleLabel: 'Caisse', label: 'Corriger une vente encaissée', description: 'Annuler ou corriger une vente déjà réglée par un avoir, avec remboursement éventuel.', sensitive: true },
+  { key: 'pos:settings', module: 'pos', moduleLabel: 'Caisse', label: 'Paramétrer', description: "Régler la caisse : plafond de remise, zone de consommation, FAQ, lien d'avis Google.", sensitive: true },
+
+  // --- Sessions de caisse ------------------------------------------------------------------------
+  { key: 'cash:view', module: 'cash', moduleLabel: 'Sessions de caisse', label: 'Consulter', description: 'Voir les sessions de caisse, leurs mouvements et récapitulatifs de clôture.' },
+  { key: 'cash:open', module: 'cash', moduleLabel: 'Sessions de caisse', label: 'Ouvrir', description: 'Ouvrir une session de caisse avec son fond initial.' },
+  { key: 'cash:movement', module: 'cash', moduleLabel: 'Sessions de caisse', label: "Entrées / sorties d'espèces", description: "Enregistrer un mouvement d'espèces hors vente.", sensitive: true },
+  { key: 'cash:close', module: 'cash', moduleLabel: 'Sessions de caisse', label: 'Clôturer', description: 'Compter les espèces et clôturer une session de caisse.', sensitive: true },
+  { key: 'cash:session_correct', module: 'cash', moduleLabel: 'Sessions de caisse', label: 'Corriger une session clôturée', description: "Corriger le comptage d'une session déjà clôturée (la valeur initiale reste visible).", sensitive: true },
+
+  // --- Salle & tables ----------------------------------------------------------------------------
+  { key: 'floor:view', module: 'floor', moduleLabel: 'Salle & tables', label: 'Consulter le plan', description: "Voir le plan de salle et l'état de ses tables." },
+  { key: 'floor:manage', module: 'floor', moduleLabel: 'Salle & tables', label: 'Éditer le plan', description: 'Créer des espaces, ajouter, déplacer ou retirer des tables, imprimer les QR codes.' },
+  { key: 'tables:all', module: 'floor', moduleLabel: 'Salle & tables', label: 'Toutes les tables', description: 'Agir sur toutes les tables (sans cette permission : uniquement les tables de ses carrés).' },
+  { key: 'tables:assign', module: 'floor', moduleLabel: 'Salle & tables', label: 'Carrés & affectations', description: 'Définir les carrés et y affecter les serveurs, y compris pendant le service.' },
+  { key: 'visits:manage', module: 'floor', moduleLabel: 'Salle & tables', label: 'Ouvrir / libérer une table', description: 'Ouvrir une visite (code client), saisir les couverts, libérer la table.' },
+
+  // --- Commandes & préparation ------------------------------------------------------------------
+  { key: 'orders:take', module: 'orders', moduleLabel: 'Commandes & préparation', label: 'Prendre une commande', description: 'Saisir une commande pour une table.' },
+  { key: 'orders:validate', module: 'orders', moduleLabel: 'Commandes & préparation', label: 'Valider les commandes QR', description: 'Accepter, refuser ou faire modifier une commande envoyée par un client.' },
+  { key: 'prep:kitchen', module: 'orders', moduleLabel: 'Commandes & préparation', label: 'Écran cuisine', description: 'Voir les préparations destinées à la cuisine.' },
+  { key: 'prep:bar', module: 'orders', moduleLabel: 'Commandes & préparation', label: 'Écran bar', description: 'Voir les préparations destinées au bar.' },
+  { key: 'prep:update', module: 'orders', moduleLabel: 'Commandes & préparation', label: 'Faire avancer une préparation', description: 'Passer une préparation à « en préparation », « prête » ou « servie ».' },
+  { key: 'actions:view', module: 'orders', moduleLabel: 'Commandes & préparation', label: 'Actions à traiter', description: 'Voir et traiter la file : commandes à valider, appels serveur, additions, annulations, réservations, avis.' },
+
+  // --- Annulations --------------------------------------------------------------------------------
+  { key: 'cancel:request', module: 'cancel', moduleLabel: 'Annulations', label: 'Demander une annulation', description: "Demander l'annulation d'un article, d'une commande ou d'une visite, avec un motif." },
+  { key: 'cancel:approve', module: 'cancel', moduleLabel: 'Annulations', label: 'Décider des annulations', description: "Accepter ou refuser les demandes d'annulation (jamais les siennes).", sensitive: true },
+
+  // --- Offres -------------------------------------------------------------------------------------
+  { key: 'offers:manage', module: 'offers', moduleLabel: 'Réductions & offres', label: 'Gérer', description: 'Créer et modifier les réductions, offres et règles de cumul.', sensitive: true },
+
+  // --- Réservations -------------------------------------------------------------------------------
+  { key: 'reservations:view', module: 'reservations', moduleLabel: 'Réservations', label: 'Consulter', description: 'Voir les réservations et demandes en ligne.' },
+  { key: 'reservations:manage', module: 'reservations', moduleLabel: 'Réservations', label: 'Gérer', description: 'Créer, confirmer, refuser, modifier une réservation et lui attribuer une table.' },
+
+  // --- Clients & fidélité ---------------------------------------------------------------------
+  { key: 'customers:view', module: 'customers', moduleLabel: 'Clients & fidélité', label: 'Consulter les clients', description: 'Identifier un client en caisse et consulter sa fiche (visites, achats, fidélité).' },
+  { key: 'customers:manage', module: 'customers', moduleLabel: 'Clients & fidélité', label: 'Gérer les clients', description: "Modifier la fiche d'un client." },
+  { key: 'feedback:manage', module: 'customers', moduleLabel: 'Clients & fidélité', label: 'Traiter les avis', description: 'Consulter et traiter les avis internes laissés par les clients.' },
+  { key: 'loyalty:manage', module: 'customers', moduleLabel: 'Clients & fidélité', label: 'Paramétrer la fidélité', description: 'Régler le barème, les récompenses et les offres ciblées.', sensitive: true },
+  { key: 'loyalty:adjust', module: 'customers', moduleLabel: 'Clients & fidélité', label: 'Ajuster des points', description: 'Ajouter ou retirer des points manuellement, avec un motif.', sensitive: true },
+
   // --- Paramètres ------------------------------------------------------------------------------
   { key: 'settings:manage', module: 'settings', moduleLabel: 'Paramètres', label: 'Gérer', description: 'Modifier les réglages généraux (seuils d’alerte, taux, marges...).', sensitive: true },
 
@@ -197,4 +251,39 @@ export const validateDraftRole = (draft: Pick<DraftRole, 'name'>, existingRoles:
     if (duplicate) issues.push({ field: 'name', message: 'Ce nom de rôle est déjà utilisé.' });
   }
   return issues;
+};
+
+// --- Staff profiles (pre-configured roles) ------------------------------------------------------
+// Starter grants created once at boot (server/rbac/bootstrap.ts); the direction adjusts them
+// afterwards from Rôles & permissions. Direction gets the whole catalog.
+
+const SERVICE_BASE = ['floor:view', 'orders:take', 'orders:validate', 'visits:manage', 'cancel:request', 'actions:view', 'products:view'];
+
+export const PROFILE_STARTER_PERMISSIONS: Record<string, string[]> = {
+  [GERANT_ROLE_NAME]: [
+    ...SERVICE_BASE,
+    'dashboard:view', 'notifications:view', 'sales:view',
+    'pos:sell', 'pos:collect', 'pos:discount', 'pos:history', 'pos:reprint', 'pos:correct',
+    'cash:view', 'cash:open', 'cash:movement', 'cash:close',
+    'tables:all', 'tables:assign', 'prep:kitchen', 'prep:bar', 'prep:update', 'cancel:approve',
+    'reservations:view', 'reservations:manage', 'customers:view', 'customers:manage', 'feedback:manage',
+    'stock:view', 'activity_log:view',
+  ],
+  [CAISSE_ROLE_NAME]: [
+    ...SERVICE_BASE,
+    'pos:sell', 'pos:collect', 'pos:history', 'pos:reprint',
+    'cash:view', 'cash:open', 'cash:movement', 'cash:close',
+    'tables:all', 'reservations:view', 'customers:view',
+  ],
+  [SERVEUR_ROLE_NAME]: [...SERVICE_BASE, 'prep:update'],
+  [CUISINE_ROLE_NAME]: ['prep:kitchen', 'prep:update'],
+  [BAR_ROLE_NAME]: ['prep:bar', 'prep:update'],
+};
+
+export const PROFILE_DESCRIPTIONS: Record<string, string> = {
+  [DIRECTION_ROLE_NAME]: 'Direction de Café Noir : administration complète (caisse, paramètres, utilisateurs, salle, clients, équipe, stocks, rapports).',
+  [CAISSE_ROLE_NAME]: 'Caisse : ventes, additions, règlements, mouvements et sessions de caisse.',
+  [SERVEUR_ROLE_NAME]: "Serveur : tables de ses carrés, commandes correspondantes, demandes d'annulation.",
+  [CUISINE_ROLE_NAME]: 'Cuisine : écran des préparations cuisine.',
+  [BAR_ROLE_NAME]: 'Bar : écran des préparations bar.',
 };

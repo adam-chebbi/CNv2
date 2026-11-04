@@ -6,6 +6,9 @@ import {
   COMPTE_SAISIE_ROLE_NAME,
   GERANT_ROLE_NAME,
   HISTORIQUE_ACCESS_PERMISSION,
+  DIRECTION_ROLE_NAME,
+  PROFILE_STARTER_PERMISSIONS,
+  PROFILE_DESCRIPTIONS,
 } from '../../src/data/rbacModel.js';
 
 interface RoleRow {
@@ -102,4 +105,28 @@ export const bootstrapRbac = (): void => {
     const insertPermission = db.prepare('INSERT OR IGNORE INTO role_permissions (role_id, permission_key) VALUES (?, ?)');
     allRoles.forEach((role) => insertPermission.run(role.id, NEW_PERMISSION_TO_GRANT_TO_EXISTING_ROLES));
   }
+
+  seedStaffProfiles();
+};
+
+// Point-of-sale profiles (Direction, Caisse, Serveur, Cuisine, Bar) are created once with their
+// starter grants. The existing Gérant role receives the point-of-sale grants once as well (flag in
+// pos_settings), so a later revocation by the direction is never undone on restart.
+const seedStaffProfiles = (): void => {
+  if (!getRoleByName(DIRECTION_ROLE_NAME)) {
+    createRole(DIRECTION_ROLE_NAME, PROFILE_DESCRIPTIONS[DIRECTION_ROLE_NAME], false, PERMISSION_KEYS);
+  }
+  Object.entries(PROFILE_STARTER_PERMISSIONS).forEach(([name, permissions]) => {
+    if (name === GERANT_ROLE_NAME) return;
+    if (!getRoleByName(name)) createRole(name, PROFILE_DESCRIPTIONS[name] ?? name, false, permissions);
+  });
+
+  const FLAG = 'rbac_pos_profiles_seeded';
+  if (db.prepare('SELECT 1 FROM pos_settings WHERE key = ?').get(FLAG)) return;
+  const gerant = getRoleByName(GERANT_ROLE_NAME);
+  if (gerant) {
+    const insertPermission = db.prepare('INSERT OR IGNORE INTO role_permissions (role_id, permission_key) VALUES (?, ?)');
+    PROFILE_STARTER_PERMISSIONS[GERANT_ROLE_NAME].forEach((key) => insertPermission.run(gerant.id, key));
+  }
+  db.prepare('INSERT INTO pos_settings (key, value, updated_at) VALUES (?, ?, ?)').run(FLAG, '1', new Date().toISOString());
 };

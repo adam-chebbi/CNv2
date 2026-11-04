@@ -4,13 +4,16 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { hashPassword } from '../lib/password.js';
+import { applyPosSchema } from './posSchema.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-const dataDir = path.join(__dirname, '..', 'data');
+// DB_PATH lets the automated tests (server/tests) run against a throwaway database file instead of
+// the real one; production and local development leave it unset.
+const dbPath = process.env.DB_PATH ?? path.join(__dirname, '..', 'data', 'cafenoir.sqlite3');
+const dataDir = path.dirname(dbPath);
 if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
 
-const dbPath = path.join(dataDir, 'cafenoir.sqlite3');
 export const db = new Database(dbPath);
 db.pragma('journal_mode = WAL');
 db.pragma('foreign_keys = ON');
@@ -150,3 +153,7 @@ if (passwordlessUsers.length > 0) {
 // never entered. Removes any such row a database created before this change; idempotent (deletes
 // zero rows once none are left) so it's safe to run on every boot rather than needing a version flag.
 db.exec("DELETE FROM expenses WHERE source_type = 'sale_vat'");
+
+// Point-of-sale tables (caisse, salle, commandes, clients, fidélité…) and the columns they add to
+// existing tables — see server/db/posSchema.ts. Additive and idempotent, like everything above.
+applyPosSchema(db);
