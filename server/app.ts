@@ -38,6 +38,7 @@ import { reservationsPublicRouter, reservationsRouter } from './routes/reservati
 import { teamRouter } from './routes/team.js';
 import { posReportsRouter } from './routes/posReports.js';
 import { equipmentRouter } from './routes/equipment.js';
+import { setupStatusRouter } from './routes/setupStatus.js';
 import { purgeOldIdempotencyKeys } from './lib/idempotency.js';
 import { ensureCsrfCookie, csrfProtection } from './middleware/csrf.js';
 
@@ -114,6 +115,7 @@ export const createApp = (): express.Express => {
   app.use('/api/pos', teamRouter);
   app.use('/api/pos', posReportsRouter);
   app.use('/api/pos', equipmentRouter);
+  app.use('/api/pos', setupStatusRouter);
 
   app.use(errorMiddleware);
 

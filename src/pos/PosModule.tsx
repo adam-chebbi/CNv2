@@ -42,6 +42,7 @@ export const POS_ADMIN_PAGES: PosPageDef[] = [
   { id: 'pos_customers', label: 'Clients', permission: 'customers:view', component: page(() => import('./CustomersPage'), 'CustomersPage') },
   { id: 'pos_loyalty', label: 'Fidélité', permission: 'loyalty:manage', component: page(() => import('./LoyaltyPage'), 'LoyaltyPage') },
   { id: 'pos_feedback', label: 'FAQ & avis clients', permission: 'feedback:manage', component: page(() => import('./FaqFeedbackPage'), 'FaqFeedbackPage') },
+  { id: 'pos_setup', label: 'Mise en service', permission: 'pos:settings', component: page(() => import('./SetupPage'), 'SetupPage') },
   { id: 'pos_settings', label: 'Paramètres caisse', permission: 'pos:settings', component: page(() => import('./PosSettingsPage'), 'PosSettingsPage') },
 ];
 

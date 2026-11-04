@@ -46,3 +46,15 @@ test('dashboard separates open bills from finalised sales, and reports averages,
   assert.equal(report.body.rows[0].quantity, 2);
   assert.equal(report.body.rows[0].product, 'Croque');
 });
+
+test('setup checklist reflects the real configuration', async () => {
+  const status = await boss.get('/api/pos/setup-status');
+  assert.equal(status.status, 200);
+  assert.equal(status.body.ready, false);
+  const recipes = status.body.items.find((i: { id: string }) => i.id === 'recipes');
+  assert.equal(recipes.status, 'todo');
+  assert.ok(recipes.list.includes('Croque'), 'a product sold without recipe is listed');
+  const floor = status.body.items.find((i: { id: string }) => i.id === 'floor');
+  assert.equal(floor.status, 'todo');
+  assert.equal((await cook.get('/api/pos/setup-status')).status, 403);
+});
