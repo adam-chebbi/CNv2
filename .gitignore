@@ -1,0 +1,17 @@
+node_modules/
+build/
+dist/
+coverage/
+.DS_Store
+*.log
+.env*
+!.env.example
+server/data/*.sqlite3
+server/data/*.sqlite3-journal
+server/data/*.sqlite3-wal
+server/data/*.sqlite3-shm
+
+# Project documentation — kept locally, never pushed
+docs/
+Cahier des charges*.pdf
+docs-site/public/screenshots/screenshots.zip

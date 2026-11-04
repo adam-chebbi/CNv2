@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#FAF9F5" />
+    <meta name="format-detection" content="telephone=no" />
+    <!-- Title, description, canonical, Open Graph, Twitter and JSON-LD are generated per page at build time (seo/seoPlugin.ts). -->
+    <!--seo:head-->
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="preload" as="image" href="/images/hero.jpg" />
+    <script>
+      // Applies the saved (or OS-preferred) theme before first paint so there is no light→dark flash.
+      (function () {
+        try {
+          var saved = localStorage.getItem('cafenoir-showcase-theme');
+          var dark = saved ? saved === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
+          var root = document.documentElement;
+          root.classList.toggle('dark', dark);
+          root.style.colorScheme = dark ? 'dark' : 'light';
+        } catch (e) {}
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <noscript>
+      <main style="max-width:40rem;margin:0 auto;padding:2rem 1.25rem;font-family:system-ui,sans-serif;line-height:1.6">
+        <h1>Café Noir — Café, brunch &amp; pâtisserie à Tunis</h1>
+        <p>
+          Café Noir vous accueille au Centre Makni, Rue Ahmed Ghanmi, Tunis 1013 : cafés d’exception, brunch, pâtisseries
+          artisanales et produits locaux, tous les jours de 7h à 22h.
+        </p>
+        <p><a href="/menu">Voir le menu complet</a> · <a href="/#histoire">Notre histoire</a> · <a href="/#contact">Contact</a></p>
+        <p>Le menu et les prix s’affichent avec JavaScript ; activez-le pour les consulter.</p>
+      </main>
+    </noscript>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

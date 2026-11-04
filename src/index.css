@@ -1,0 +1,140 @@
+@import "tailwindcss";
+
+/* The public showcase site lives in ./showcase with its own Tailwind build — keep its classes out
+   of the management app's stylesheet. */
+@source not "../showcase";
+@source not "../historique";
+
+/* The app enforces light mode only — every `dark:` utility below must depend on the literal
+   `.dark` class (which App.tsx never applies, isDarkMode is hardcoded false), never on the
+   device's own OS/browser color-scheme preference. Without this, Tailwind v4 defaults `dark:`
+   to `@media (prefers-color-scheme: dark)`, so a phone set to dark mode would apply every
+   `dark:` class regardless of the app's own state. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --color-primary: var(--primary);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+}
+
+:root {
+  --primary: #00A86B;
+  --sidebar-accent: #E8F8F2;
+  --sidebar-accent-foreground: #00A86B;
+  --sidebar-foreground: #4B5563;
+  --sidebar-border: #E5E7EB;
+  --sidebar-ring: #10B981;
+  /* Stops mobile browsers from painting their own dark UA background (page canvas, overscroll
+     area, form controls, scrollbars) when the device is set to system dark mode. */
+  color-scheme: light only;
+}
+
+.dark {
+  --primary: #10B981;
+  --sidebar-accent: rgba(16, 185, 129, 0.15);
+  --sidebar-accent-foreground: #34D399;
+  --sidebar-foreground: #9CA3AF;
+  --sidebar-border: #1F2937;
+  --sidebar-ring: #10B981;
+}
+
+@layer base {
+  /* Locks the document itself so it can never scroll or rubber-band as a whole — on mobile
+     Safari in particular, an inner element claiming h-screen/overflow-hidden (App.tsx's root
+     div) isn't always enough on its own to stop the actual <body> from still bounce-scrolling,
+     especially with the dynamic address-bar viewport quirks. With html/body pinned, the ONLY
+     thing that can ever scroll is a container that explicitly opts in with its own overflow-y —
+     #app-main-scroll-area (the page content) and the sidebar's nav list, never the page as a
+     whole, the header, or the sidebar's own frame. */
+  html, body {
+    height: 100%;
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+  body {
+    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    background-color: #ffffff;
+  }
+  /* Removes the ~300ms tap delay and double-tap-to-zoom on interactive elements without
+     disabling pinch-to-zoom (touch-action: manipulation keeps panning/pinch, drops the rest) —
+     makes the whole app feel instantly responsive to touch on phones/tablets. */
+  button, a, [role="button"], input, select, textarea {
+    touch-action: manipulation;
+  }
+}
+
+.grid-cols-24 {
+  grid-template-columns: repeat(24, minmax(0, 1fr));
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(156, 163, 175, 0.4);
+  border-radius: 9999px;
+}
+
+@keyframes wave-scroll {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+.animate-water-wave-1 { animation: wave-scroll 8s linear infinite; }
+.animate-water-wave-2 { animation: wave-scroll 12s linear infinite reverse; }
+.animate-water-wave-3 { animation: wave-scroll 16s linear infinite; }
+
+@keyframes hand-wave {
+  0%, 100% { transform: rotate(0deg); }
+  10% { transform: rotate(14deg); }
+  20% { transform: rotate(-8deg); }
+  30% { transform: rotate(14deg); }
+  40% { transform: rotate(-4deg); }
+  50% { transform: rotate(10deg); }
+  60% { transform: rotate(0deg); }
+}
+.animate-hand-wave { animation: hand-wave 2.5s ease-in-out infinite; transform-origin: 70% 70%; display: inline-block; }
+
+/* Login page ambient background: slow-drifting blobs + panning dot grid + rising steam wisps. */
+@keyframes blob-float-1 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33% { transform: translate(30px, -40px) scale(1.08); }
+  66% { transform: translate(-20px, 24px) scale(0.95); }
+}
+@keyframes blob-float-2 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(-36px, 30px) scale(1.1); }
+}
+@keyframes blob-float-3 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  40% { transform: translate(24px, 26px) scale(1.06); }
+  70% { transform: translate(-18px, -18px) scale(0.96); }
+}
+@keyframes grid-pan {
+  from { background-position: 0 0; }
+  to { background-position: 26px 26px; }
+}
+@keyframes steam-rise {
+  0% { transform: translateY(0) scaleX(1); opacity: 0; }
+  15% { opacity: 0.5; }
+  85% { opacity: 0.12; }
+  100% { transform: translateY(-140px) scaleX(1.6); opacity: 0; }
+}
+.animate-blob-float-1 { animation: blob-float-1 16s ease-in-out infinite; }
+.animate-blob-float-2 { animation: blob-float-2 20s ease-in-out infinite; }
+.animate-blob-float-3 { animation: blob-float-3 24s ease-in-out infinite; }
+.animate-grid-pan { animation: grid-pan 42s linear infinite; }
+.animate-steam-rise { animation: steam-rise 5s ease-in infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-blob-float-1, .animate-blob-float-2, .animate-blob-float-3, .animate-grid-pan, .animate-steam-rise {
+    animation: none;
+  }
+}

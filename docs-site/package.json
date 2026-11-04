@@ -1,0 +1,35 @@
+{
+  "name": "cafe-noir-docs",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "build-content": "node scripts/build-content.mjs",
+    "predev": "npm run build-content",
+    "dev": "vite --port=3200 --host=0.0.0.0",
+    "prebuild": "npm run build-content",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --port=3200 --host=0.0.0.0",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "lucide-react": "^0.546.0",
+    "react": "^19.0.1",
+    "react-dom": "^19.0.1",
+    "react-router-dom": "^7.1.1"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.1.14",
+    "@types/node": "^22.14.0",
+    "@types/react": "^19.0.1",
+    "@types/react-dom": "^19.0.1",
+    "@vitejs/plugin-react": "^5.0.4",
+    "gray-matter": "^4.0.3",
+    "highlight.js": "^11.10.0",
+    "marked": "^15.0.6",
+    "marked-highlight": "^2.2.1",
+    "tailwindcss": "^4.1.14",
+    "typescript": "~5.8.2",
+    "vite": "^6.2.3"
+  }
+}

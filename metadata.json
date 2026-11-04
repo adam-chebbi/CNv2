@@ -1,0 +1,6 @@
+{
+  "name": "Tableau de Bord POS",
+  "description": "Tableau de bord de gestion et point de vente pour le salon Café Noir avec indicateurs d'exploitation, comparatifs de périodes, calendrier d'activité journalier et alertes de stock.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

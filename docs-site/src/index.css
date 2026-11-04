@@ -1,0 +1,202 @@
+@import "tailwindcss";
+
+/* Same tokens as ../src/index.css (the management app) — kept in sync by hand since the two are
+   separate Vite builds, but the values must match so this reads as the same product. Light mode
+   only, same primary green, same font. */
+@theme {
+  --color-primary: var(--primary);
+}
+
+:root {
+  --primary: #00A86B;
+  color-scheme: light only;
+}
+
+@layer base {
+  body {
+    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    background-color: #fcfcfc;
+  }
+  button, a, [role="button"], input, select, textarea {
+    touch-action: manipulation;
+  }
+}
+
+/* Rendered Markdown content (docs-site/src/pages/ArticlePage.tsx) — deliberately plain, scoped
+   selectors rather than Tailwind Typography, so headings/paragraphs/code blocks read exactly
+   like the rest of this site instead of a generic prose theme. */
+.docs-article h2 {
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: #111827;
+  margin-top: 2.25rem;
+  margin-bottom: 0.75rem;
+  scroll-margin-top: 5.5rem;
+}
+.docs-article h2:first-child { margin-top: 0; }
+.docs-article h3 {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #1f2937;
+  margin-top: 1.75rem;
+  margin-bottom: 0.6rem;
+  scroll-margin-top: 5.5rem;
+}
+.docs-article p {
+  color: #374151;
+  line-height: 1.75;
+  margin-bottom: 1rem;
+  font-size: 0.925rem;
+}
+.docs-article ul, .docs-article ol {
+  color: #374151;
+  line-height: 1.75;
+  margin-bottom: 1rem;
+  padding-left: 1.4rem;
+  font-size: 0.925rem;
+}
+.docs-article ul { list-style-type: disc; }
+.docs-article ol { list-style-type: decimal; }
+.docs-article li { margin-bottom: 0.35rem; }
+.docs-article li > ul, .docs-article li > ol { margin-top: 0.35rem; margin-bottom: 0; }
+.docs-article strong { color: #111827; font-weight: 700; }
+.docs-article a {
+  color: #00A86B;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.docs-article a:hover { color: #00875a; }
+.docs-article blockquote {
+  border-left: 3px solid #00A86B;
+  background: #E8F8F2;
+  color: #065f46;
+  padding: 0.75rem 1rem;
+  border-radius: 0.5rem;
+  margin: 1.25rem 0;
+  font-size: 0.9rem;
+}
+.docs-article code {
+  background: #F3F4F6;
+  color: #b91c1c;
+  padding: 0.15rem 0.4rem;
+  border-radius: 0.35rem;
+  font-size: 0.85em;
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+}
+.docs-article pre {
+  background: #0f172a;
+  border-radius: 0.9rem;
+  padding: 1rem 1.1rem;
+  overflow-x: auto;
+  margin: 1.25rem 0;
+  font-size: 0.82rem;
+  line-height: 1.6;
+}
+.docs-article pre code {
+  background: transparent;
+  color: #e5e7eb;
+  padding: 0;
+  font-size: 1em;
+}
+.docs-article img {
+  display: block;
+  border-radius: 1rem;
+  border: 1px solid #E5E7EB;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+  margin: 1.25rem auto;
+  max-width: 100%;
+  height: auto;
+}
+/* A caption is an italicized line right under an image: `![alt](...)` then `*caption*` on its own
+   line — centered and dimmed so it reads as a caption, not body text. */
+.docs-article p:has(> img:only-child) + p:has(> em:only-child) {
+  margin-top: -0.75rem;
+  text-align: center;
+  font-size: 0.8125rem;
+  color: #6B7280;
+}
+.docs-article table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1.25rem 0;
+  font-size: 0.875rem;
+}
+.docs-article th, .docs-article td {
+  border: 1px solid #E5E7EB;
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+}
+.docs-article th { background: #F9FAFB; font-weight: 700; color: #111827; }
+.docs-article hr { border: none; border-top: 1px solid #E5E7EB; margin: 2rem 0; }
+
+/* Hides the scrollbar on the header's horizontally-scrollable category-tab row (Header.tsx) —
+   the row still scrolls by touch/drag/wheel exactly as normal, this only removes the visible
+   track, since a persistent scrollbar under a single row of tabs reads as clutter, not signal. */
+.no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
+
+/* Numbered step-by-step instructions (scripts/build-content.mjs renders every TOP-LEVEL ordered
+   list this way — a nested one, e.g. inside a step's own body, still falls back to the plain
+   decimal <ol> styling above) — a connected vertical timeline of numbered badges, the same
+   pattern Stripe's own docs use for setup/integration guides, restyled in this app's own palette
+   (emerald, Plus Jakarta Sans, rounded-2xl) rather than copied wholesale. */
+.docs-article ol.steps {
+  list-style: none;
+  padding-left: 0;
+  margin: 1.5rem 0;
+  counter-reset: none;
+}
+.docs-article ol.steps > li.step {
+  position: relative;
+  display: flex;
+  gap: 1rem;
+  padding-bottom: 1.75rem;
+  margin-bottom: 0;
+}
+.docs-article ol.steps > li.step:last-child { padding-bottom: 0; }
+/* The connecting line — one continuous border down the badge column, drawn on the li itself so
+   it spans exactly from the center of one badge to the next, not the whole ol's height. */
+.docs-article ol.steps > li.step::before {
+  content: '';
+  position: absolute;
+  left: 15px;
+  top: 32px;
+  bottom: -4px;
+  width: 2px;
+  background: linear-gradient(to bottom, #A7F3D0, #E5E7EB);
+}
+.docs-article ol.steps > li.step:last-child::before { display: none; }
+.docs-article ol.steps .step-num {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: 9999px;
+  background: #00A86B;
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.8rem;
+  font-weight: 800;
+  position: relative;
+  z-index: 1;
+  box-shadow: 0 0 0 4px #ffffff;
+}
+.docs-article ol.steps .step-body {
+  flex: 1;
+  min-width: 0;
+  padding-top: 0.25rem;
+}
+.docs-article ol.steps .step-body > p:first-child { margin-top: 0; }
+.docs-article ol.steps .step-body > p:last-child { margin-bottom: 0; }
+
+/* highlight.js theme tuned to the same slate-900 code background above (github-dark, hand-picked
+   colors, not the stock stylesheet, to avoid pulling in an extra CSS file for a handful of rules). */
+.hljs-keyword, .hljs-selector-tag, .hljs-literal, .hljs-title.function_ { color: #f472b6; }
+.hljs-string, .hljs-attr { color: #a5d6a7; }
+.hljs-comment { color: #94a3b8; font-style: italic; }
+.hljs-number { color: #fbbf24; }
+.hljs-title.class_, .hljs-title { color: #7dd3fc; }
+.hljs-built_in { color: #7dd3fc; }

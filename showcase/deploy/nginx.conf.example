@@ -1,0 +1,40 @@
+# Café Noir showcase — nginx server block, on its OWN domain (NOT cafe.cafenoir.tn).
+#
+# Replace `cafenoir.tn` / `www.cafenoir.tn` with the domain you pick for the showcase, and
+# `/var/www/CNsystemmanagement/showcase/dist` with the folder the build is served from.
+# The management system keeps its own server block for cafe.cafenoir.tn — do not edit that one.
+#
+# The showcase is a static single-page app: nginx only serves files; the menu is fetched by the
+# visitor's browser from https://cafe.cafenoir.tn/api/public/products (CORS-open, read-only).
+
+server {
+    listen 80;
+    listen [::]:80;
+    server_name cafenoir.tn www.cafenoir.tn;
+
+    root /var/www/CNsystemmanagement/showcase/dist;
+    index index.html;
+
+    # Gzip the text assets.
+    gzip on;
+    gzip_types text/css application/javascript application/json image/svg+xml;
+
+    # Hashed build assets never change — cache them for a year.
+    location /assets/ {
+        try_files $uri =404;
+        add_header Cache-Control "public, max-age=31536000, immutable";
+    }
+
+    # Everything else falls back to index.html so /menu and /a-propos work on direct load/refresh.
+    # index.html itself must never be cached, otherwise visitors would keep an old build.
+    location / {
+        try_files $uri $uri/ /index.html;
+        add_header Cache-Control "no-cache";
+    }
+
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+}
+
+# After DNS points at this server, add HTTPS with:
+#   sudo certbot --nginx -d cafenoir.tn -d www.cafenoir.tn

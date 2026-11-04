@@ -1,0 +1,60 @@
+@import "tailwindcss";
+
+/* Same visual language as the main app (src/index.css there): emerald primary, Plus Jakarta Sans,
+   light mode only, locked document with an inner scroll area. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --color-primary: #00A86B;
+}
+
+:root {
+  color-scheme: light only;
+}
+
+@layer base {
+  html, body {
+    height: 100%;
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+  body {
+    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    background-color: #ffffff;
+  }
+  button, a, [role="button"], input, select, textarea {
+    touch-action: manipulation;
+  }
+  /* iOS zooms into any field under 16px on focus — keep inputs at 16px on phones. */
+  @media (max-width: 640px) {
+    input, select, textarea { font-size: 16px !important; }
+  }
+}
+
+.custom-scrollbar::-webkit-scrollbar { width: 4px; }
+.custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+.custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(156, 163, 175, 0.4); border-radius: 9999px; }
+
+@keyframes blob-float-1 { 0%, 100% { transform: translate(0, 0) scale(1); } 33% { transform: translate(30px, -40px) scale(1.08); } 66% { transform: translate(-20px, 24px) scale(0.95); } }
+@keyframes blob-float-2 { 0%, 100% { transform: translate(0, 0) scale(1); } 50% { transform: translate(-36px, 30px) scale(1.1); } }
+@keyframes grid-pan { from { background-position: 0 0; } to { background-position: 26px 26px; } }
+@keyframes fade-up { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes sheet-up { from { transform: translateY(100%); } to { transform: translateY(0); } }
+.animate-blob-float-1 { animation: blob-float-1 16s ease-in-out infinite; }
+.animate-blob-float-2 { animation: blob-float-2 20s ease-in-out infinite; }
+.animate-grid-pan { animation: grid-pan 42s linear infinite; }
+.animate-fade-up { animation: fade-up 0.25s ease-out both; }
+.animate-sheet-up { animation: sheet-up 0.25s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-blob-float-1, .animate-blob-float-2, .animate-grid-pan, .animate-fade-up, .animate-sheet-up { animation: none; }
+}
+
+/* Printing a journée sheet (Historique → Imprimer): only the sheet, no chrome. */
+@media print {
+  html, body { height: auto; overflow: visible; }
+  .no-print { display: none !important; }
+  #app-main-scroll-area { overflow: visible !important; height: auto !important; }
+  .print-sheet { box-shadow: none !important; border: none !important; }
+}

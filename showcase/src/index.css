@@ -1,0 +1,150 @@
+@import "tailwindcss";
+
+/* Class-based dark mode: `.dark` on <html> (set by the toggle / the inline script in index.html). */
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --color-page: var(--page);
+  --color-section: var(--section);
+  --color-card: var(--card);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-subtle: var(--subtle);
+  --color-line: var(--line);
+  --color-brand: var(--brand);
+  --color-accent: var(--accent);
+  --color-on-brand: var(--on-brand);
+  --font-sans: 'DM Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-serif: 'Newsreader', 'Times New Roman', Georgia, serif;
+}
+
+:root {
+  --page: #FAF9F5;
+  --section: #F6F1EE;
+  --card: #FFFFFF;
+  --ink: #0F1A17;
+  --muted: #4A5856;
+  --subtle: #829A99;
+  --line: #E6E8E3;
+  --brand: #C66724;
+  --accent: #C66724;
+  /* Buttons/borders swap the mint "Mint Jelly" brand color for the same orange — the button text
+     color flips to light too, since #0F1A17 (dark ink) has poor contrast on this darker orange
+     (it was tuned for the much lighter mint). Dark mode keeps the original mint + dark-ink pair. */
+  --on-brand: #FAF9F5;
+  color-scheme: light;
+}
+
+.dark {
+  --page: #0D1411;
+  --section: #111B17;
+  --card: #16221D;
+  --ink: #F1F5F3;
+  --muted: #B3C0BB;
+  --subtle: #7C918B;
+  --line: #22302A;
+  --brand: #5DD3B2;
+  --accent: #6FE0BE;
+  --on-brand: #0B1F19;
+  color-scheme: dark;
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    background-color: var(--page);
+    color: var(--ink);
+    overflow-x: hidden;
+  }
+  button, a, [role="button"], input, select, textarea {
+    touch-action: manipulation;
+  }
+  :focus-visible {
+    outline: 2px solid var(--brand);
+    outline-offset: 3px;
+  }
+}
+
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(20px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+.animate-fade-up { animation: fade-up 0.85s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+/* Scroll-reveal (see lib/useInView.ts + components/ui/Reveal.tsx): held in the "from" state of
+   fade-up until the element's own IntersectionObserver flips it to .is-visible. A medium pace on
+   purpose — slow enough to actually see happen, not so slow it feels sluggish while scrolling. */
+.reveal { opacity: 0; transform: translateY(20px) scale(0.98); }
+.reveal.is-visible { animation: fade-up 0.85s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+/* Media hover-zoom: a contained image (overflow-hidden ancestor) grows slightly on hover — used on
+   photo cards throughout the site (menu cards, gallery thumbnails, the story photo). */
+.media-zoom { transition: transform 0.6s cubic-bezier(0.22, 1, 0.36, 1); }
+.media-zoom:hover { transform: scale(1.06); }
+
+/* Native <dialog> entrance/exit (Ambiance gallery): scale + fade in on open, reverse on close.
+   Unsupported browsers just get the plain show/hide — no @starting-style, no animation, no harm. */
+@starting-style {
+  .dialog-pop[open] { opacity: 0; transform: scale(0.96) translateY(8px); }
+}
+.dialog-pop {
+  transition: opacity 0.3s cubic-bezier(0.22, 1, 0.36, 1), transform 0.3s cubic-bezier(0.22, 1, 0.36, 1), overlay 0.3s allow-discrete, display 0.3s allow-discrete;
+}
+.dialog-pop[open] { opacity: 1; transform: scale(1) translateY(0); }
+.dialog-pop:not([open]) { opacity: 0; transform: scale(0.96) translateY(8px); }
+.dialog-pop::backdrop {
+  transition: opacity 0.3s ease, overlay 0.3s allow-discrete, display 0.3s allow-discrete;
+  opacity: 0;
+}
+.dialog-pop[open]::backdrop { opacity: 1; }
+@starting-style {
+  .dialog-pop[open]::backdrop { opacity: 0; }
+}
+
+/* Theme-toggle icon swap: the sun/moon glyph pops in in place of a hard cut. */
+@keyframes icon-pop-in {
+  from { opacity: 0; transform: scale(0.5) rotate(-45deg); }
+  to { opacity: 1; transform: scale(1) rotate(0); }
+}
+.icon-pop-in { animation: icon-pop-in 0.35s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+/* Mobile floating contact bar: springs up into place with a slight overshoot, like a physical
+   object dropped into a pocket, instead of a flat linear slide. */
+@keyframes bar-pop-in {
+  0% { opacity: 0; transform: translateY(120%) scale(0.92); }
+  70% { opacity: 1; transform: translateY(-4px) scale(1.01); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+.bar-pop-in { animation: bar-pop-in 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+
+/* Desktop WhatsApp button: a slow, gentle attention pulse — subtle enough not to nag. */
+@keyframes soft-pulse-ring {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--brand) 35%, transparent); }
+  50% { box-shadow: 0 0 0 10px color-mix(in srgb, var(--brand) 0%, transparent); }
+}
+.soft-pulse-ring { animation: soft-pulse-ring 2.8s ease-in-out infinite; }
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.skeleton {
+  background: linear-gradient(90deg, rgba(130,154,153,0.12) 25%, rgba(130,154,153,0.28) 50%, rgba(130,154,153,0.12) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.6s linear infinite;
+}
+
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  .animate-fade-up, .skeleton, .reveal.is-visible, .icon-pop-in, .bar-pop-in, .soft-pulse-ring { animation: none; }
+  .reveal { opacity: 1; transform: none; }
+  .media-zoom, .dialog-pop { transition: none; }
+}
