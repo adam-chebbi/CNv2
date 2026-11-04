@@ -23,7 +23,7 @@ export const addLine = (lines: CartLineInput[], line: CartLineInput): CartLineIn
   return existing ? lines.map((l) => (l === existing ? { ...l, quantity: Math.min(99, l.quantity + line.quantity) } : l)) : [...lines, line];
 };
 
-const OptionPicker: React.FC<{ article: PricedArticle; catalog: PricingCatalog; onCancel: () => void; onAdd: (line: CartLineInput) => void; allowInstruction: boolean }> = ({
+export const OptionPicker: React.FC<{ article: PricedArticle; catalog: PricingCatalog; onCancel: () => void; onAdd: (line: CartLineInput) => void; allowInstruction: boolean }> = ({
   article,
   catalog,
   onCancel,

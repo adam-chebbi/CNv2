@@ -1,4 +1,4 @@
-import {StrictMode} from 'react';
+import {StrictMode, Suspense, lazy} from 'react';
 import {createRoot} from 'react-dom/client';
 import App from './App.tsx';
 import { AuthProvider } from './auth/AuthContext';
@@ -8,6 +8,10 @@ import { CookieConsentBanner } from './components/CookieConsentBanner';
 import { UpdateAvailableToast } from './components/UpdateAvailableToast';
 import { initUpdateManager } from './pwa/updateManager';
 import './index.css';
+
+// Customer pages (QR code on the tables, customer account, booking) are public: no staff login.
+const CLIENT_PATH = /^\/(t\/[^/]+|compte|reserver)\/?$/;
+const ClientApp = lazy(() => import('./client/ClientApp').then((m) => ({ default: m.ClientApp })));
 
 // Deploy-safety: detects a new build in the background (service worker) and applies it either
 // when the user explicitly asks (the toast below) or automatically the moment it's safe to (tab
@@ -31,16 +35,28 @@ window.addEventListener('vite:preloadError', () => {
   window.location.reload();
 });
 
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <CookieConsentProvider>
-      <AuthProvider>
-        <AuthGate>
-          <App />
-        </AuthGate>
-      </AuthProvider>
-      <CookieConsentBanner />
-      <UpdateAvailableToast />
-    </CookieConsentProvider>
-  </StrictMode>,
-);
+const root = createRoot(document.getElementById('root')!);
+
+if (CLIENT_PATH.test(window.location.pathname)) {
+  root.render(
+    <StrictMode>
+      <Suspense fallback={null}>
+        <ClientApp />
+      </Suspense>
+    </StrictMode>,
+  );
+} else {
+  root.render(
+    <StrictMode>
+      <CookieConsentProvider>
+        <AuthProvider>
+          <AuthGate>
+            <App />
+          </AuthGate>
+        </AuthProvider>
+        <CookieConsentBanner />
+        <UpdateAvailableToast />
+      </CookieConsentProvider>
+    </StrictMode>,
+  );
+}

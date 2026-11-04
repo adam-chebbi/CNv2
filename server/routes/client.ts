@@ -7,7 +7,7 @@ import { emitPosEvent } from '../lib/events.js';
 import { runIdempotent } from '../lib/idempotency.js';
 import { rateLimit } from '../lib/rateLimit.js';
 import { currentCustomerId, sha256 } from '../lib/clientIdentity.js';
-import { loadPricingCatalog } from '../lib/posCatalog.js';
+import { loadActiveDiscountRules, loadPricingCatalog } from '../lib/posCatalog.js';
 import {
   activeLinesOfSale,
   createOrder,
@@ -89,6 +89,8 @@ clientRouter.get('/menu', asyncHandler((_req, res) => {
       .map((a) => ({ ...a, allergens: allergens.filter((x) => x.article_id === a.id).map((x) => ({ name: x.allergen, state: x.state })) })),
     extras: [...catalog.extras.values()],
     incompatibleExtras: catalog.incompatibleExtras,
+    // Public offers only (never targeted ones), so the cart shows the total the team will apply.
+    offers: loadActiveDiscountRules().filter((d) => !d.customerIds && !d.identifiedCustomersOnly),
   });
 }));
 
