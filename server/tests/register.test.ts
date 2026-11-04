@@ -153,7 +153,8 @@ test('table service: sections restrict waiters, orders reach kitchen and bar, re
   assert.equal(sale.orders[0].lines[0].responsibleWaiter, 'Amine');
 
   // kitchen sees the brunch, bar the cappuccino — no prices on either board
-  const onT1 = (board: { tickets: { label: string }[] }) => board.tickets.filter((t) => t.label.startsWith('T1'));
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const onT1 = (board: { tickets: any[] }): any[] => board.tickets.filter((t) => t.label.startsWith('T1'));
   const kitchen = await cook.get('/api/pos/prep/kitchen');
   const bar = await barista.get('/api/pos/prep/bar');
   kitchen.body.tickets = onT1(kitchen.body);
@@ -173,7 +174,7 @@ test('table service: sections restrict waiters, orders reach kitchen and bar, re
   await waiterA.post(`/api/pos/visits/${visit.body.id}/orders`, { lines: [{ articleId: sandwichId, quantity: 1 }] }, key());
   const kitchen2 = onT1((await cook.get('/api/pos/prep/kitchen')).body);
   assert.equal(kitchen2.length, 2);
-  assert.equal(kitchen2.filter((t) => (t as unknown as { lines: { status: string }[] }).lines[0].status === 'to_prepare').length, 1);
+  assert.equal(kitchen2.filter((t) => t.lines[0].status === 'to_prepare').length, 1);
 
   // release: covers first, then payment
   assert.equal((await waiterA.post(`/api/pos/visits/${visit.body.id}/close`)).status, 409);
