@@ -29,7 +29,7 @@ test('staff profiles are created at boot with their starter grants', () => {
   const cuisine = ctx.db
     .prepare("SELECT permission_key FROM role_permissions rp JOIN roles r ON r.id = rp.role_id WHERE r.name = 'Cuisine'")
     .all() as { permission_key: string }[];
-  assert.deepEqual(cuisine.map((p) => p.permission_key).sort(), ['prep:kitchen', 'prep:update']);
+  assert.deepEqual(cuisine.map((p) => p.permission_key).sort(), ['prep:kitchen', 'prep:update', 'timeclock:self']);
 });
 
 test('the activity journal is append-only', () => {
