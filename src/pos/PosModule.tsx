@@ -24,6 +24,8 @@ export const POS_PAGES: PosPageDef[] = [
   { id: 'pos_bar', label: 'Écran bar', permission: 'prep:bar', component: page(() => import('./PrepBoardPage'), 'BarBoardPage') },
   { id: 'pos_reservations', label: 'Réservations', permission: 'reservations:view', component: page(() => import('./ReservationsPage'), 'ReservationsPage') },
   { id: 'pos_cancellations', label: 'Annulations', permission: 'cancel:request', component: page(() => import('./CancellationsPage'), 'CancellationsPage') },
+  { id: 'pos_timeclock', label: 'Pointage', permission: 'timeclock:self', component: page(() => import('./TeamPages'), 'TimeclockPage') },
+  { id: 'pos_team', label: 'Équipe', permission: 'timeclock:team', component: page(() => import('./TeamPages'), 'TeamPage') },
   { id: 'pos_tickets', label: 'Tickets', permission: 'pos:history', component: page(() => import('./TicketsPage'), 'TicketsPage') },
   { id: 'pos_sessions', label: 'Sessions de caisse', permission: 'cash:view', component: page(() => import('./SessionsHistoryPage'), 'SessionsHistoryPage') },
 ];

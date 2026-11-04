@@ -9,6 +9,7 @@ import {
   DIRECTION_ROLE_NAME,
   PROFILE_STARTER_PERMISSIONS,
   PROFILE_DESCRIPTIONS,
+  PROFILE_GRANT_WAVES,
 } from '../../src/data/rbacModel.js';
 
 interface RoleRow {
@@ -121,12 +122,23 @@ const seedStaffProfiles = (): void => {
     if (!getRoleByName(name)) createRole(name, PROFILE_DESCRIPTIONS[name] ?? name, false, permissions);
   });
 
+  const insertPermission = db.prepare('INSERT OR IGNORE INTO role_permissions (role_id, permission_key) VALUES (?, ?)');
+  const markDone = (flag: string) => db.prepare('INSERT INTO pos_settings (key, value, updated_at) VALUES (?, ?, ?)').run(flag, '1', new Date().toISOString());
+  const isDone = (flag: string) => Boolean(db.prepare('SELECT 1 FROM pos_settings WHERE key = ?').get(flag));
+
   const FLAG = 'rbac_pos_profiles_seeded';
-  if (db.prepare('SELECT 1 FROM pos_settings WHERE key = ?').get(FLAG)) return;
-  const gerant = getRoleByName(GERANT_ROLE_NAME);
-  if (gerant) {
-    const insertPermission = db.prepare('INSERT OR IGNORE INTO role_permissions (role_id, permission_key) VALUES (?, ?)');
-    PROFILE_STARTER_PERMISSIONS[GERANT_ROLE_NAME].forEach((key) => insertPermission.run(gerant.id, key));
+  if (!isDone(FLAG)) {
+    const gerant = getRoleByName(GERANT_ROLE_NAME);
+    if (gerant) PROFILE_STARTER_PERMISSIONS[GERANT_ROLE_NAME].forEach((key) => insertPermission.run(gerant.id, key));
+    markDone(FLAG);
   }
-  db.prepare('INSERT INTO pos_settings (key, value, updated_at) VALUES (?, ?, ?)').run(FLAG, '1', new Date().toISOString());
+
+  PROFILE_GRANT_WAVES.forEach((wave) => {
+    if (isDone(wave.flag)) return;
+    Object.entries(wave.grants).forEach(([name, keys]) => {
+      const role = getRoleByName(name);
+      if (role) keys.forEach((key) => insertPermission.run(role.id, key));
+    });
+    markDone(wave.flag);
+  });
 };

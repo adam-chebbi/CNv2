@@ -606,12 +606,67 @@ CREATE TABLE IF NOT EXISTS reservation_events (
 );
 `;
 
+const TEAM_AND_EQUIPMENT = `
+-- ---------------------------------------------------------------- Pointage (§13)
+-- Time comes from the server clock, never from the device. A correction never overwrites: the
+-- event keeps its original time, the correction row records who changed what and why.
+CREATE TABLE IF NOT EXISTS timeclock_events (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  user_name TEXT NOT NULL,
+  action TEXT NOT NULL CHECK (action IN ('in', 'break_start', 'break_end', 'out')),
+  occurred_at TEXT NOT NULL,
+  original_at TEXT,
+  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'voided')),
+  incoherent INTEGER NOT NULL DEFAULT 0,
+  source TEXT NOT NULL CHECK (source IN ('self', 'manual')),
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_timeclock_user ON timeclock_events(user_id, occurred_at);
+
+CREATE TABLE IF NOT EXISTS timeclock_corrections (
+  id TEXT PRIMARY KEY,
+  event_id TEXT NOT NULL REFERENCES timeclock_events(id),
+  kind TEXT NOT NULL CHECK (kind IN ('edit', 'add', 'void')),
+  before_at TEXT,
+  after_at TEXT,
+  reason TEXT NOT NULL,
+  created_by_id TEXT NOT NULL,
+  created_by TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+
+-- ---------------------------------------------------------------- Équipements (§15)
+CREATE TABLE IF NOT EXISTS equipment (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  reference TEXT,
+  category TEXT NOT NULL,
+  serial_number TEXT,
+  supplier TEXT,
+  purchase_date TEXT,
+  in_service_date TEXT NOT NULL,
+  value_mil INTEGER NOT NULL CHECK (value_mil > 0),
+  residual_mil INTEGER NOT NULL DEFAULT 0 CHECK (residual_mil >= 0),
+  duration_months INTEGER NOT NULL CHECK (duration_months > 0),
+  document TEXT,
+  status TEXT NOT NULL CHECK (status IN ('active', 'retired')),
+  retired_on TEXT,
+  retired_reason TEXT,
+  created_by TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_by TEXT,
+  updated_at TEXT
+);
+`;
+
 export const applyPosSchema = (db: Db): void => {
   applyFoundation(db);
   db.exec(CATALOG);
   db.exec(SERVICE);
   db.exec(CUSTOMER_SERVICES);
   db.exec(CUSTOMERS);
+  db.exec(TEAM_AND_EQUIPMENT);
   // A register exists out of the box; more can be added from the settings.
   const hasRegister = db.prepare('SELECT 1 FROM cash_registers LIMIT 1').get();
   if (!hasRegister) {

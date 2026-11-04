@@ -178,6 +178,17 @@ export const PERMISSIONS: PermissionDef[] = [
   { key: 'loyalty:manage', module: 'customers', moduleLabel: 'Clients & fidélité', label: 'Paramétrer la fidélité', description: 'Régler le barème, les récompenses et les offres ciblées.', sensitive: true },
   { key: 'loyalty:adjust', module: 'customers', moduleLabel: 'Clients & fidélité', label: 'Ajuster des points', description: 'Ajouter ou retirer des points manuellement, avec un motif.', sensitive: true },
 
+  // --- Équipe : pointage et statistiques -----------------------------------------------------------
+  { key: 'timeclock:self', module: 'team', moduleLabel: 'Équipe & pointage', label: 'Pointer', description: 'Pointer son arrivée, ses pauses et son départ, et consulter son propre historique.' },
+  { key: 'timeclock:team', module: 'team', moduleLabel: 'Équipe & pointage', label: "Présences de l'équipe", description: "Consulter les présences, durées et anomalies de toute l'équipe." },
+  { key: 'timeclock:correct', module: 'team', moduleLabel: 'Équipe & pointage', label: 'Corriger un pointage', description: 'Corriger ou compléter un pointage, avec un motif (la valeur initiale reste visible).', sensitive: true },
+  { key: 'stats:self', module: 'team', moduleLabel: 'Équipe & pointage', label: 'Mes statistiques', description: 'Consulter ses propres indicateurs de service.' },
+  { key: 'stats:team', module: 'team', moduleLabel: 'Équipe & pointage', label: 'Statistiques des serveurs', description: "Consulter les indicateurs de tous les serveurs.", sensitive: true },
+
+  // --- Équipements -------------------------------------------------------------------------------
+  { key: 'equipment:view', module: 'equipment', moduleLabel: 'Machines & amortissement', label: 'Consulter', description: 'Voir le registre des équipements et leur amortissement.' },
+  { key: 'equipment:manage', module: 'equipment', moduleLabel: 'Machines & amortissement', label: 'Gérer', description: 'Ajouter, modifier ou sortir du suivi un équipement.', sensitive: true },
+
   // --- Paramètres ------------------------------------------------------------------------------
   { key: 'settings:manage', module: 'settings', moduleLabel: 'Paramètres', label: 'Gérer', description: 'Modifier les réglages généraux (seuils d’alerte, taux, marges...).', sensitive: true },
 
@@ -287,3 +298,19 @@ export const PROFILE_DESCRIPTIONS: Record<string, string> = {
   [CUISINE_ROLE_NAME]: 'Cuisine : écran des préparations cuisine.',
   [BAR_ROLE_NAME]: 'Bar : écran des préparations bar.',
 };
+
+// Grants added after the first release of the profiles. Each wave is applied once to the roles that
+// already exist (flag in pos_settings), so a later revocation by the direction is never undone.
+export const PROFILE_GRANT_WAVES: { flag: string; grants: Record<string, string[]> }[] = [
+  {
+    flag: 'rbac_wave_team_equipment',
+    grants: {
+      [DIRECTION_ROLE_NAME]: ['timeclock:self', 'timeclock:team', 'timeclock:correct', 'stats:self', 'stats:team', 'equipment:view', 'equipment:manage'],
+      [GERANT_ROLE_NAME]: ['timeclock:self', 'timeclock:team', 'stats:self', 'stats:team', 'equipment:view', 'reports:view'],
+      [CAISSE_ROLE_NAME]: ['timeclock:self', 'stats:self'],
+      [SERVEUR_ROLE_NAME]: ['timeclock:self', 'stats:self'],
+      [CUISINE_ROLE_NAME]: ['timeclock:self'],
+      [BAR_ROLE_NAME]: ['timeclock:self'],
+    },
+  },
+];
