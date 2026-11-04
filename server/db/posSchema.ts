@@ -411,10 +411,65 @@ CREATE TABLE IF NOT EXISTS pos_ticket_prints (
 );
 `;
 
+const CUSTOMER_SERVICES = `
+-- Appel serveur / demande d'addition from the QR page. A repeated tap while a request of the same
+-- type is still active only increments press_count (§10.1).
+CREATE TABLE IF NOT EXISTS service_requests (
+  id TEXT PRIMARY KEY,
+  visit_id TEXT NOT NULL REFERENCES visits(id),
+  table_id TEXT NOT NULL REFERENCES dining_tables(id),
+  type TEXT NOT NULL CHECK (type IN ('call_waiter', 'bill')),
+  status TEXT NOT NULL CHECK (status IN ('open', 'in_progress', 'done')),
+  press_count INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL,
+  taken_by TEXT,
+  taken_at TEXT,
+  done_by TEXT,
+  done_at TEXT
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_service_requests_one_active ON service_requests(visit_id, type) WHERE status != 'done';
+
+CREATE TABLE IF NOT EXISTS faq_entries (
+  id TEXT PRIMARY KEY,
+  question TEXT NOT NULL,
+  answer TEXT NOT NULL,
+  article_id TEXT,
+  sort INTEGER NOT NULL DEFAULT 0,
+  published INTEGER NOT NULL DEFAULT 1,
+  updated_by TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+-- Allergen information validated by Café Noir. No row = not documented, which is never shown as
+-- "free from" (§10.3).
+CREATE TABLE IF NOT EXISTS product_allergens (
+  article_id TEXT NOT NULL,
+  allergen TEXT NOT NULL,
+  state TEXT NOT NULL CHECK (state IN ('contains', 'free')),
+  PRIMARY KEY (article_id, allergen)
+);
+
+-- Avis internes (§10.4).
+CREATE TABLE IF NOT EXISTS feedback (
+  id TEXT PRIMARY KEY,
+  visit_id TEXT,
+  table_name TEXT,
+  customer_id TEXT,
+  rating INTEGER NOT NULL CHECK (rating BETWEEN 1 AND 5),
+  comment TEXT,
+  status TEXT NOT NULL CHECK (status IN ('to_handle', 'in_progress', 'resolved')),
+  internal_notes TEXT,
+  handled_by TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+`;
+
 export const applyPosSchema = (db: Db): void => {
   applyFoundation(db);
   db.exec(CATALOG);
   db.exec(SERVICE);
+  db.exec(CUSTOMER_SERVICES);
   // A register exists out of the box; more can be added from the settings.
   const hasRegister = db.prepare('SELECT 1 FROM cash_registers LIMIT 1').get();
   if (!hasRegister) {

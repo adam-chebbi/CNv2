@@ -479,6 +479,7 @@ floorRouter.post('/visits/:id/close', requirePermission('visits:manage'), asyncH
       visit.id
     );
     db.prepare('UPDATE visit_devices SET revoked_at = ? WHERE visit_id = ? AND revoked_at IS NULL').run(now, visit.id);
+    db.prepare("UPDATE service_requests SET status = 'done', done_by = ?, done_at = ? WHERE visit_id = ? AND status != 'done'").run(user.fullName, now, visit.id);
     // An empty bill (everything cancelled) is closed with the visit.
     db.prepare("UPDATE pos_sales SET status = 'cancelled' WHERE visit_id = ? AND status = 'open' AND total_mil = 0").run(visit.id);
     recordActivity('Salle', 'Table libérée', `${table.name} — ${visit.covers} couvert(s)`, user.fullName, { userId: user.id, entityType: 'visit', entityId: visit.id });

@@ -29,6 +29,8 @@ import { cashSessionsRouter } from './routes/cashSessions.js';
 import { posSalesRouter } from './routes/posSales.js';
 import { floorRouter } from './routes/floor.js';
 import { prepRouter } from './routes/prep.js';
+import { clientRouter } from './routes/client.js';
+import { serviceDeskRouter } from './routes/serviceDesk.js';
 import { purgeOldIdempotencyKeys } from './lib/idempotency.js';
 import { ensureCsrfCookie, csrfProtection } from './middleware/csrf.js';
 
@@ -70,6 +72,8 @@ export const createApp = (): express.Express => {
   // /api/* path before Express reaches later mounts, so a public route mounted after them would
   // answer 401 to the storefront.
   app.use('/api/public', publicRouter);
+  // Customer pages (QR code on the tables, customer account): no staff session, same reason.
+  app.use('/api/client', clientRouter);
   // Same catalog under the shorter, storefront-friendly URL (exact path only — no /api/products/:id).
   app.get('/api/products', openCors, listPublicProducts);
   app.use('/api', productCatalogRouter);
@@ -94,6 +98,7 @@ export const createApp = (): express.Express => {
   app.use('/api/pos', posSalesRouter);
   app.use('/api/pos', floorRouter);
   app.use('/api/pos', prepRouter);
+  app.use('/api/pos', serviceDeskRouter);
 
   app.use(errorMiddleware);
 
