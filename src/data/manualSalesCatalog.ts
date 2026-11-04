@@ -85,6 +85,8 @@ export interface VariantOption {
   id: string;
   label: string;
   priceDelta?: number;
+  // Extra ingredients this variant consumes on top of the product recipe (e.g. "Grand": +8 g café).
+  recipe?: RecipeLine[];
 }
 
 export interface VariantGroup {

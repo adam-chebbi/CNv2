@@ -24,6 +24,7 @@ import { rolesRouter } from './routes/roles.js';
 import { bootstrapRbac } from './rbac/bootstrap.js';
 import { errorMiddleware } from './middleware/errors.js';
 import { eventsRouter } from './lib/events.js';
+import { posCatalogRouter } from './routes/posCatalog.js';
 import { purgeOldIdempotencyKeys } from './lib/idempotency.js';
 import { ensureCsrfCookie, csrfProtection } from './middleware/csrf.js';
 
@@ -82,6 +83,9 @@ export const createApp = (): express.Express => {
   app.use('/api/showcase-settings', showcaseSettingsRouter);
   app.use('/api', settingsRouter);
   app.use('/api', rolesRouter);
+
+  // Point of sale (caisse, salle, commandes, préparation, clients).
+  app.use('/api/pos', posCatalogRouter);
 
   app.use(errorMiddleware);
 

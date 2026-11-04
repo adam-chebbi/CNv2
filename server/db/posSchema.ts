@@ -69,6 +69,58 @@ const applyFoundation = (db: Db): void => {
   addColumn(db, 'catalog_articles', 'prep_destination', 'prep_destination TEXT');
 };
 
+const CATALOG = `
+-- Extras that cannot be chosen together on one item (e.g. two kinds of milk).
+CREATE TABLE IF NOT EXISTS catalog_extra_incompatibilities (
+  extra_a TEXT NOT NULL REFERENCES catalog_extras(id) ON DELETE CASCADE,
+  extra_b TEXT NOT NULL REFERENCES catalog_extras(id) ON DELETE CASCADE,
+  PRIMARY KEY (extra_a, extra_b),
+  CHECK (extra_a < extra_b)
+);
+
+-- Réductions et offres. value: basis points for percent (2000 = 20 %), millimes for fixed.
+CREATE TABLE IF NOT EXISTS discounts (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  kind TEXT NOT NULL CHECK (kind IN ('percent', 'fixed')),
+  value INTEGER NOT NULL CHECK (value > 0),
+  scope TEXT NOT NULL CHECK (scope IN ('items', 'ticket')),
+  article_ids TEXT NOT NULL DEFAULT '[]',
+  categories TEXT NOT NULL DEFAULT '[]',
+  starts_on TEXT,
+  ends_on TEXT,
+  weekdays TEXT NOT NULL DEFAULT '[]',
+  start_time TEXT,
+  end_time TEXT,
+  min_ticket_mil INTEGER NOT NULL DEFAULT 0,
+  identified_only INTEGER NOT NULL DEFAULT 0,
+  customer_ids TEXT,
+  stackable INTEGER NOT NULL DEFAULT 0,
+  active INTEGER NOT NULL DEFAULT 1,
+  created_by TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_by TEXT,
+  updated_at TEXT
+);
+
+-- The V1 boolean is_available and the tri-state availability stay consistent whichever code path
+-- writes them: V1 screens toggle the boolean, point-of-sale screens set the tri-state (and the
+-- boolean with it).
+CREATE TRIGGER IF NOT EXISTS catalog_availability_on_insert AFTER INSERT ON catalog_articles
+WHEN NEW.is_available = 0 AND NEW.availability = 'available'
+BEGIN UPDATE catalog_articles SET availability = 'unavailable' WHERE id = NEW.id; END;
+
+CREATE TRIGGER IF NOT EXISTS catalog_availability_on_flag AFTER UPDATE OF is_available ON catalog_articles
+WHEN NEW.is_available IS NOT OLD.is_available
+BEGIN
+  UPDATE catalog_articles SET availability = CASE
+    WHEN NEW.is_available = 0 THEN CASE WHEN NEW.availability IN ('hidden', 'unavailable') THEN NEW.availability ELSE 'unavailable' END
+    ELSE 'available' END
+  WHERE id = NEW.id;
+END;
+`;
+
 export const applyPosSchema = (db: Db): void => {
   applyFoundation(db);
+  db.exec(CATALOG);
 };
