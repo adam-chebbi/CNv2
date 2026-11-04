@@ -22,12 +22,21 @@ export const POS_PAGES: PosPageDef[] = [
   { id: 'pos_actions', label: 'Actions à traiter', permission: 'actions:view', component: page(() => import('./ActionsPage'), 'ActionsPage') },
   { id: 'pos_kitchen', label: 'Écran cuisine', permission: 'prep:kitchen', component: page(() => import('./PrepBoardPage'), 'KitchenBoardPage') },
   { id: 'pos_bar', label: 'Écran bar', permission: 'prep:bar', component: page(() => import('./PrepBoardPage'), 'BarBoardPage') },
+  { id: 'pos_reservations', label: 'Réservations', permission: 'reservations:view', component: page(() => import('./ReservationsPage'), 'ReservationsPage') },
   { id: 'pos_cancellations', label: 'Annulations', permission: 'cancel:request', component: page(() => import('./CancellationsPage'), 'CancellationsPage') },
   { id: 'pos_tickets', label: 'Tickets', permission: 'pos:history', component: page(() => import('./TicketsPage'), 'TicketsPage') },
   { id: 'pos_sessions', label: 'Sessions de caisse', permission: 'cash:view', component: page(() => import('./SessionsHistoryPage'), 'SessionsHistoryPage') },
 ];
 
-export const POS_ADMIN_PAGES: PosPageDef[] = [];
+export const POS_ADMIN_PAGES: PosPageDef[] = [
+  { id: 'pos_floor_editor', label: 'Plan de salle & QR codes', permission: 'floor:manage', component: page(() => import('./FloorEditorPage'), 'FloorEditorPage') },
+  { id: 'pos_menu', label: 'Carte & disponibilités', permission: 'products:manage', component: page(() => import('./MenuSettingsPage'), 'MenuSettingsPage') },
+  { id: 'pos_offers', label: 'Réductions & offres', permission: 'offers:manage', component: page(() => import('./OffersPage'), 'OffersPage') },
+  { id: 'pos_customers', label: 'Clients', permission: 'customers:view', component: page(() => import('./CustomersPage'), 'CustomersPage') },
+  { id: 'pos_loyalty', label: 'Fidélité', permission: 'loyalty:manage', component: page(() => import('./LoyaltyPage'), 'LoyaltyPage') },
+  { id: 'pos_feedback', label: 'FAQ & avis clients', permission: 'feedback:manage', component: page(() => import('./FaqFeedbackPage'), 'FaqFeedbackPage') },
+  { id: 'pos_settings', label: 'Paramètres caisse', permission: 'pos:settings', component: page(() => import('./PosSettingsPage'), 'PosSettingsPage') },
+];
 
 export const PosModule: React.FC<{ subId: string }> = ({ subId }) => {
   const { hasPermission } = useAuth();
