@@ -402,6 +402,22 @@ CREATE INDEX IF NOT EXISTS idx_cancellation_requests_status ON cancellation_requ
 -- One pending request per target at a time.
 CREATE UNIQUE INDEX IF NOT EXISTS idx_cancellation_one_pending ON cancellation_requests(target_type, target_id) WHERE status = 'pending';
 
+-- Avoirs: correction or cancellation of a sale already paid (§7.4). The original ticket is left
+-- untouched and stays consultable; the credit note records what is taken back and any refund.
+CREATE TABLE IF NOT EXISTS sale_adjustments (
+  id TEXT PRIMARY KEY,
+  sale_id TEXT NOT NULL REFERENCES pos_sales(id),
+  reason TEXT NOT NULL,
+  amount_mil INTEGER NOT NULL CHECK (amount_mil > 0),
+  lines_json TEXT NOT NULL,
+  refund_payment_id TEXT,
+  stock_treatment TEXT NOT NULL CHECK (stock_treatment IN ('restored', 'loss', 'offered', 'prep_error', 'other', 'none')),
+  created_by_id TEXT NOT NULL,
+  created_by TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_sale_adjustments_sale ON sale_adjustments(sale_id);
+
 CREATE TABLE IF NOT EXISTS pos_ticket_prints (
   id TEXT PRIMARY KEY,
   sale_id TEXT NOT NULL REFERENCES pos_sales(id),

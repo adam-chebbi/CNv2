@@ -31,6 +31,7 @@ import { floorRouter } from './routes/floor.js';
 import { prepRouter } from './routes/prep.js';
 import { clientRouter } from './routes/client.js';
 import { serviceDeskRouter } from './routes/serviceDesk.js';
+import { cancellationsRouter } from './routes/cancellations.js';
 import { purgeOldIdempotencyKeys } from './lib/idempotency.js';
 import { ensureCsrfCookie, csrfProtection } from './middleware/csrf.js';
 
@@ -99,6 +100,7 @@ export const createApp = (): express.Express => {
   app.use('/api/pos', floorRouter);
   app.use('/api/pos', prepRouter);
   app.use('/api/pos', serviceDeskRouter);
+  app.use('/api/pos', cancellationsRouter);
 
   app.use(errorMiddleware);
 

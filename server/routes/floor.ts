@@ -465,7 +465,7 @@ floorRouter.post('/visits/:id/close', requirePermission('visits:manage'), asyncH
   if (visit.status !== 'open') throw new ApiError(409, 'Cette visite est déjà clôturée.');
   if (!visit.covers) throw new ApiError(409, 'Renseignez le nombre de couverts avant de libérer la table.');
   const blockers = visitCloseBlockers(visit.id);
-  if (blockers.length > 0) throw new ApiError(409, blockers[0]);
+  if (blockers.length > 0) throw new ApiError(409, blockers.join(' '));
   const now = new Date().toISOString();
   const table = getTable(visit.table_id);
   db.transaction(() => {
