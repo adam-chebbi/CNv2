@@ -26,6 +26,8 @@ export const startTestServer = async (): Promise<TestContext> => {
   const { createApp, prepareDatabase } = await import('../app.ts');
   const { db } = await import('../db/connection.ts');
   const { hashPassword } = await import('../lib/password.ts');
+  const { setRateLimitEnabled } = await import('../lib/rateLimit.ts');
+  setRateLimitEnabled(false);
   prepareDatabase();
 
   const server: Server = await new Promise((resolve) => {

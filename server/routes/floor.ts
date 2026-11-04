@@ -11,7 +11,7 @@ import { assertTableAccess, assignedTableIds, canSeeAllTables, currentWaiterOfTa
 import { actorOf, createOrder, openSaleForVisit, pendingOrdersOfVisit, priceCart, saleDetail, validateOrder, type OrderRow } from '../lib/posService.js';
 import { serializeOrder } from '../lib/posService.js';
 import { cartLineSchema } from './posCatalog.js';
-import { visitCloseBlockers, floorExtensions } from '../lib/floorState.js';
+import { visitCloseBlockers, floorExtensions, runVisitClosedHooks } from '../lib/floorState.js';
 
 // Plan de salle, tables, carrés et visites (cahier des charges §6).
 
@@ -482,6 +482,7 @@ floorRouter.post('/visits/:id/close', requirePermission('visits:manage'), asyncH
     db.prepare("UPDATE service_requests SET status = 'done', done_by = ?, done_at = ? WHERE visit_id = ? AND status != 'done'").run(user.fullName, now, visit.id);
     // An empty bill (everything cancelled) is closed with the visit.
     db.prepare("UPDATE pos_sales SET status = 'cancelled' WHERE visit_id = ? AND status = 'open' AND total_mil = 0").run(visit.id);
+    runVisitClosedHooks(visit.id, user.fullName);
     recordActivity('Salle', 'Table libérée', `${table.name} — ${visit.covers} couvert(s)`, user.fullName, { userId: user.id, entityType: 'visit', entityId: visit.id });
   })();
   emitPosEvent({ type: 'floor.changed' });

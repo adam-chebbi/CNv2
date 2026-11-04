@@ -37,3 +37,12 @@ registerVisitCloseBlocker((visitId) => {
 });
 
 export const visitCloseBlockers = (visitId: string): string[] => closeBlockers.map((b) => b(visitId)).filter((m): m is string => Boolean(m));
+
+// Side effects of releasing a table that belong to other modules (e.g. a seated reservation is
+// completed). Run inside the closing transaction.
+type VisitClosedHook = (visitId: string, by: string) => void;
+const visitClosedHooks: VisitClosedHook[] = [];
+export const onVisitClosed = (hook: VisitClosedHook): void => {
+  visitClosedHooks.push(hook);
+};
+export const runVisitClosedHooks = (visitId: string, by: string): void => visitClosedHooks.forEach((h) => h(visitId, by));

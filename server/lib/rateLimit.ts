@@ -6,8 +6,20 @@ import { ApiError } from '../middleware/errors.js';
 // resets the counters.
 
 const hits = new Map<string, number[]>();
+let enabled = true;
+
+// The API tests send every request from 127.0.0.1; they switch the limiter off, except the test
+// that checks it.
+export const setRateLimitEnabled = (value: boolean): void => {
+  enabled = value;
+  hits.clear();
+};
 
 export const rateLimit = (name: string, max: number, windowMs: number) => (req: Request, _res: Response, next: NextFunction): void => {
+  if (!enabled) {
+    next();
+    return;
+  }
   const now = Date.now();
   const id = `${name}:${req.ip}`;
   const recent = (hits.get(id) ?? []).filter((t) => now - t < windowMs);
