@@ -32,6 +32,9 @@ export const PosSettingsPage: React.FC = () => {
           <Field label="Plafond d'une remise manuelle (% du ticket)">
             <input className={inputCls} inputMode="numeric" value={s.manualDiscountMaxPercent} onChange={(e) => set({ manualDiscountMaxPercent: Math.min(100, Number(e.target.value.replace(/\D/g, '')) || 0) })} />
           </Field>
+          <Field label="Déconnexion automatique après inactivité (minutes, 0 = jamais)" hint="Recommandé sur les postes partagés (caisse, tablettes).">
+            <input className={inputCls} inputMode="numeric" value={s.idleLogoutMinutes} onChange={(e) => set({ idleLogoutMinutes: Math.min(720, Number(e.target.value.replace(/\D/g, '')) || 0) })} />
+          </Field>
           <Field label="Zone de stock consommée par les ventes">
             <select className={inputCls} value={s.consumptionZone} onChange={(e) => set({ consumptionZone: e.target.value as PosSettings['consumptionZone'] })}>
               <option>Réserve principale</option>

@@ -4,6 +4,7 @@ import { useCookieConsent } from './context/CookieConsentContext';
 import { getCookie, setCookie } from './lib/cookies';
 import { Sidebar } from './components/Sidebar';
 import { PosModule } from './pos/PosModule';
+import { useIdleLogout } from './hooks/useIdleLogout';
 import { Header } from './components/Header';
 import { HeroBanner } from './components/HeroBanner';
 import { MetricCards } from './components/MetricCards';
@@ -190,6 +191,7 @@ export default function App() {
     'upgrade' | 'restock' | 'sales_returns' | 'purchase_returns' | 'products' | 'clients' | 'vendors' | null
   >(null);
   const { user, logout, hasPermission } = useAuth();
+  useIdleLogout(logout);
   const performedBy = user?.fullName ?? 'Utilisateur';
 
   // Defense in depth only — the real gate is server-side (every /roles, /users and /permissions

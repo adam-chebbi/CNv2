@@ -15,7 +15,9 @@
     "lint": "tsc --noEmit",
     "test": "tsx --test \"server/tests/**/*.test.ts\"",
     "check": "npm run lint && npm run server:typecheck && npm test",
-    "seed:pos-demo": "tsx server/scripts/seed-pos-demo.ts"
+    "seed:pos-demo": "tsx server/scripts/seed-pos-demo.ts",
+    "backup": "tsx server/scripts/backup.ts",
+    "backup:verify": "tsx server/scripts/verify-backup.ts"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.1.14",

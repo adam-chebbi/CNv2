@@ -10,6 +10,7 @@ export interface PosSettings {
   openingTime: string; // HH:MM
   closingTime: string;
   publicAppUrl: string; // base URL printed in table QR codes, e.g. https://system.cafenoir.tn
+  idleLogoutMinutes: number; // shared devices: automatic sign-out after inactivity (0 = never)
 }
 
 export const POS_SETTING_DEFAULTS: PosSettings = {
@@ -21,4 +22,5 @@ export const POS_SETTING_DEFAULTS: PosSettings = {
   openingTime: '07:00',
   closingTime: '23:00',
   publicAppUrl: '',
+  idleLogoutMinutes: 0,
 };

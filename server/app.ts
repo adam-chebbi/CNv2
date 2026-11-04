@@ -66,6 +66,14 @@ export const createApp = (): express.Express => {
   // nginx sits in front of this process on the same host — trust its X-Forwarded-For so req.ip
   // reflects the real client IP (used for session/device logging) instead of nginx's own address.
   app.set('trust proxy', 'loopback');
+  // Security headers on every response (also set by nginx in production; harmless twice).
+  app.use((_req, res, next) => {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+    res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+    next();
+  });
   app.use(express.json({ limit: '15mb' }));
   app.use(cookieParser());
   // Runs on every request (app shell + API) so the CSRF cookie is already set before the first

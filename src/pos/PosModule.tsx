@@ -1,5 +1,5 @@
 import React, { lazy, Suspense } from 'react';
-import { ShieldAlert } from 'lucide-react';
+import { ShieldAlert, UserRoundCog } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 import { Loading } from './ui';
 
@@ -47,7 +47,7 @@ export const POS_ADMIN_PAGES: PosPageDef[] = [
 ];
 
 export const PosModule: React.FC<{ subId: string }> = ({ subId }) => {
-  const { hasPermission } = useAuth();
+  const { hasPermission, logout, user } = useAuth();
   const all = [...POS_PAGES, ...POS_ADMIN_PAGES];
   // Without a sub-page (section clicked), open the first screen the user may use.
   const def = all.find((p) => p.id === subId) ?? all.find((p) => hasPermission(p.permission)) ?? all[0];
@@ -60,8 +60,16 @@ export const PosModule: React.FC<{ subId: string }> = ({ subId }) => {
   }
   const Component = def.component;
   return (
-    <Suspense fallback={<Loading />}>
-      <Component />
-    </Suspense>
+    <div className="space-y-2">
+      {/* Shared devices: each person works under their own account (§3.1). */}
+      <div className="flex justify-end">
+        <button onClick={() => void logout()} className="inline-flex items-center gap-1.5 text-xs font-semibold text-gray-600 hover:text-emerald-700 px-2 py-1 rounded-lg hover:bg-gray-100">
+          <UserRoundCog size={14} /> {user?.fullName} · Changer d'utilisateur
+        </button>
+      </div>
+      <Suspense fallback={<Loading />}>
+        <Component />
+      </Suspense>
+    </div>
   );
 };

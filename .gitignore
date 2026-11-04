@@ -20,3 +20,6 @@ docs-site/public/screenshots/screenshots.zip
 *.md
 !README.md
 *.pdf
+
+# Local database backups (npm run backup)
+server/data/backups/

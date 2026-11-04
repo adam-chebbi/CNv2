@@ -237,6 +237,7 @@ export const readPosSettings = (): PosSettings => ({
   openingTime: getPosSetting('opening_time', POS_SETTING_DEFAULTS.openingTime),
   closingTime: getPosSetting('closing_time', POS_SETTING_DEFAULTS.closingTime),
   publicAppUrl: getPosSetting('public_app_url', POS_SETTING_DEFAULTS.publicAppUrl),
+  idleLogoutMinutes: Number(getPosSetting('idle_logout_minutes', String(POS_SETTING_DEFAULTS.idleLogoutMinutes))),
 });
 
 const settingsSchema = z.object({
@@ -248,6 +249,7 @@ const settingsSchema = z.object({
   openingTime: time,
   closingTime: time,
   publicAppUrl: z.union([z.literal(''), z.string().url().max(200)]),
+  idleLogoutMinutes: z.number().int().min(0).max(720).default(0),
 });
 
 posCatalogRouter.get('/settings', requireAnyPermission('pos:settings', 'pos:sell', 'orders:take', 'reservations:view'), asyncHandler((_req, res) => {
@@ -267,6 +269,7 @@ posCatalogRouter.put('/settings', requirePermission('pos:settings'), asyncHandle
     setPosSetting('opening_time', body.openingTime, user.fullName);
     setPosSetting('closing_time', body.closingTime, user.fullName);
     setPosSetting('public_app_url', body.publicAppUrl.replace(/\/$/, ''), user.fullName);
+    setPosSetting('idle_logout_minutes', String(body.idleLogoutMinutes), user.fullName);
     recordActivity('Caisse', 'Paramètres', 'Paramètres de la caisse modifiés', user.fullName, { userId: user.id, before, after: body });
   })();
   res.json(readPosSettings());
@@ -316,4 +319,9 @@ posCatalogRouter.put('/catalog/articles/:id/variant-recipes', requirePermission(
     recordActivity('Produits', 'Consommation des variantes', row.name, req.user!.fullName, { userId: req.user!.id, entityType: 'catalog_article', entityId: row.id, before: variants, after: updated });
   })();
   res.json({ variants: updated.map((v) => ({ id: v.id, label: v.label, recipe: v.recipe ?? [] })) });
+}));
+
+// Session policy for every signed-in screen (shared devices: automatic sign-out, §18.1).
+posCatalogRouter.get('/session-policy', asyncHandler((_req, res) => {
+  res.json({ idleLogoutMinutes: readPosSettings().idleLogoutMinutes });
 }));

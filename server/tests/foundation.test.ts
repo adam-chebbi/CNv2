@@ -41,3 +41,14 @@ test('the live event stream requires a session', async () => {
   const res = await fetch(`${ctx.baseUrl}/api/events`);
   assert.equal(res.status, 401);
 });
+
+test('security headers are set and the session policy is readable by any signed-in user', async () => {
+  const res = await fetch(`${ctx.baseUrl}/api/client/menu`);
+  assert.equal(res.headers.get('x-content-type-options'), 'nosniff');
+  assert.equal(res.headers.get('x-frame-options'), 'SAMEORIGIN');
+  const cook = await ctx.createUser('Chef', ['prep:kitchen']);
+  const policy = await cook.get('/api/pos/session-policy');
+  assert.equal(policy.status, 200);
+  assert.equal(policy.body.idleLogoutMinutes, 0);
+  assert.equal((await fetch(`${ctx.baseUrl}/api/pos/session-policy`)).status, 401);
+});
