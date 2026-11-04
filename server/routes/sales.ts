@@ -141,6 +141,13 @@ const reverseSaleSideEffects = (saleId: number, performedBy: string, saleNumber:
   });
 };
 
+// Settled register sales on a Tunis day (UTC+1 all year).
+const registerDays = (day: string): { id: string }[] => {
+  const start = new Date(`${day}T00:00:00+01:00`).toISOString();
+  const end = new Date(new Date(`${day}T00:00:00+01:00`).getTime() + 86_400_000).toISOString();
+  return db.prepare("SELECT id FROM pos_sales WHERE status = 'completed' AND completed_at >= ? AND completed_at < ? LIMIT 1").all(start, end) as { id: string }[];
+};
+
 export const salesRouter = Router();
 salesRouter.use(requireAuth);
 
@@ -150,8 +157,21 @@ salesRouter.get('/transactions', requirePermission('sales:view'), asyncHandler((
 }));
 
 salesRouter.post('/transactions', requirePermission('sales:create'), asyncHandler((req, res) => {
-  const body = z.object({ tickets: z.array(saleSchema).min(1) }).parse(req.body);
+  const body = z.object({ tickets: z.array(saleSchema).min(1), allowRegisterOverlap: z.boolean().optional() }).parse(req.body);
   body.tickets.forEach((t) => resolveEffectiveEmployeeName(req.user!, t.barista));
+  // A day already recorded by the cash register must not be re-entered by import or manual entry:
+  // its sales — and their stock consumption — would be counted twice (cahier des charges §14.5).
+  if (!body.allowRegisterOverlap) {
+    const days = [...new Set(body.tickets.map((t) => t.date))];
+    const covered = days.filter((d) => registerDays(d).length > 0);
+    if (covered.length > 0) {
+      throw new ApiError(
+        409,
+        `La caisse a déjà enregistré des ventes le ${covered.join(', ')} : ces ventes seraient comptées deux fois (chiffre d'affaires et stock). Retirez ces journées de la saisie.`,
+        'REGISTER_DAY_OVERLAP'
+      );
+    }
+  }
   const tx = db.transaction(() => {
     const maxRow = db.prepare('SELECT MAX(id) as maxId FROM sales_transactions').get() as { maxId: number | null };
     let nextId = (maxRow.maxId ?? 0) + 1;

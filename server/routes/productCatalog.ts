@@ -256,7 +256,9 @@ productCatalogRouter.delete(
 
 // --- Articles (products) ------------------------------------------------------------------------
 
-const variantSchema = z.object({ id: z.string(), label: z.string(), priceDelta: z.number().optional() });
+// recipe: extra ingredients a variant consumes (edited from Carte & disponibilités); kept here so a
+// save from the product form never drops it.
+const variantSchema = z.object({ id: z.string(), label: z.string(), priceDelta: z.number().optional(), recipe: z.array(recipeLineSchema).optional() });
 
 const articleSchema = z.object({
   id: z.string().optional(),

@@ -9,6 +9,7 @@ import { emitPosEvent } from '../lib/events.js';
 import { getPosSetting, loadActiveDiscountRules, loadPricingCatalog, rowToDiscount, setPosSetting, type DiscountRow } from '../lib/posCatalog.js';
 import { computeCart, PricingError } from '../../src/data/pricing.js';
 import { POS_SETTING_DEFAULTS, type PosSettings } from '../../src/data/posSettings.js';
+import { getVariantGroupForCategory, type VariantOption } from '../../src/data/manualSalesCatalog.js';
 
 export const posCatalogRouter = Router();
 posCatalogRouter.use(requireAuth);
@@ -269,4 +270,50 @@ posCatalogRouter.put('/settings', requirePermission('pos:settings'), asyncHandle
     recordActivity('Caisse', 'Paramètres', 'Paramètres de la caisse modifiés', user.fullName, { userId: user.id, before, after: body });
   })();
   res.json(readPosSettings());
+}));
+
+// --- Variant consumption (§8.2, §14.2) -------------------------------------------------------------
+
+// Extra ingredients consumed by a variant (e.g. "Grand": +8 g café, +50 ml lait). A product using
+// its category's variant group gets its own copy of that group (same ids and prices) when edited.
+const variantsForEdit = (articleId: string) => {
+  const row = db.prepare('SELECT id, name, category, variants FROM catalog_articles WHERE id = ?').get(articleId) as
+    | { id: string; name: string; category: string; variants: string | null }
+    | undefined;
+  if (!row) throw notFound('Produit');
+  const own = row.variants ? (JSON.parse(row.variants) as VariantOption[]) : [];
+  const variants = own.length > 0 ? own : (getVariantGroupForCategory(row.category)?.options ?? []);
+  return { row, variants };
+};
+
+posCatalogRouter.get('/catalog/articles/:id/variant-recipes', requirePermission('products:manage'), asyncHandler((req, res) => {
+  const { variants } = variantsForEdit(req.params.id);
+  const ingredients = db.prepare('SELECT id, name, unit FROM stock_products ORDER BY name').all();
+  const units = (db.prepare('SELECT name FROM stock_units ORDER BY name').all() as { name: string }[]).map((u) => u.name);
+  res.json({ variants: variants.map((v) => ({ id: v.id, label: v.label, recipe: v.recipe ?? [] })), ingredients, units });
+}));
+
+const variantRecipeSchema = z.object({
+  variants: z.array(
+    z.object({
+      id: z.string().min(1),
+      recipe: z.array(z.object({ ingredientId: z.string().min(1), quantity: z.number().positive().max(100_000), unit: z.string().min(1).max(20) })).max(30),
+    })
+  ),
+});
+
+posCatalogRouter.put('/catalog/articles/:id/variant-recipes', requirePermission('products:manage'), asyncHandler((req, res) => {
+  const body = variantRecipeSchema.parse(req.body);
+  const { row, variants } = variantsForEdit(req.params.id);
+  if (variants.length === 0) throw new ApiError(400, "Ce produit n'a pas de variante.");
+  const updated: VariantOption[] = variants.map((v) => {
+    const edit = body.variants.find((e) => e.id === v.id);
+    if (!edit) return v;
+    return { ...v, recipe: edit.recipe.map((l) => ({ id: randomUUID(), kind: 'ingredient' as const, ingredientId: l.ingredientId, quantity: l.quantity, unit: l.unit })) };
+  });
+  db.transaction(() => {
+    db.prepare('UPDATE catalog_articles SET variants = ? WHERE id = ?').run(JSON.stringify(updated), row.id);
+    recordActivity('Produits', 'Consommation des variantes', row.name, req.user!.fullName, { userId: req.user!.id, entityType: 'catalog_article', entityId: row.id, before: variants, after: updated });
+  })();
+  res.json({ variants: updated.map((v) => ({ id: v.id, label: v.label, recipe: v.recipe ?? [] })) });
 }));
