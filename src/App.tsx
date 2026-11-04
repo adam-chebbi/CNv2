@@ -3,6 +3,7 @@ import React, { useState, useEffect, useCallback, useMemo, Suspense, lazy } from
 import { useCookieConsent } from './context/CookieConsentContext';
 import { getCookie, setCookie } from './lib/cookies';
 import { Sidebar } from './components/Sidebar';
+import { PosModule } from './pos/PosModule';
 import { Header } from './components/Header';
 import { HeroBanner } from './components/HeroBanner';
 import { MetricCards } from './components/MetricCards';
@@ -1682,6 +1683,8 @@ export default function App() {
                   }}
                 />
               </Suspense>
+            ) : activeTab === 'pos' || activeTab === 'pos_admin' ? (
+              <PosModule subId={activeSubItem} />
             ) : activeTab === 'roles_permissions' ? (
               <Suspense fallback={<StockPageLoadingFallback />}>
                 <RolesPermissionsPage

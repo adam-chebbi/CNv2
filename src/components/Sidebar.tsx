@@ -20,9 +20,12 @@ import {
   LogOut,
   HelpCircle,
   ClipboardList,
+  Store,
+  SlidersHorizontal,
 } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 import { HISTORIQUE_ACCESS_PERMISSION, HISTORIQUE_URL, MANAGE_ROLES_PERMISSION } from '../data/rbacModel';
+import { POS_ADMIN_PAGES, POS_PAGES } from '../pos/PosModule';
 
 interface SubMenuItem {
   id: string;
@@ -104,6 +107,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
       items: [
         { id: 'dashboard', label: 'Tableau de bord', icon: LayoutDashboard, permission: 'dashboard:view' },
         { id: 'notifications', label: 'Notifications & Alertes', icon: Bell, permission: 'notifications:view' },
+      ],
+    },
+    {
+      heading: 'Caisse & service',
+      items: [
+        { id: 'pos', label: 'Caisse & service', icon: Store, subItems: POS_PAGES.map((p) => ({ id: p.id, label: p.label, permission: p.permission })) },
+        ...(POS_ADMIN_PAGES.length > 0
+          ? [{ id: 'pos_admin', label: 'Paramétrage caisse', icon: SlidersHorizontal, subItems: POS_ADMIN_PAGES.map((p) => ({ id: p.id, label: p.label, permission: p.permission })) }]
+          : []),
       ],
     },
     {
@@ -260,6 +272,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const collapsedItems = [
     { id: 'dashboard', label: 'Tableau de bord', icon: LayoutDashboard },
     { id: 'notifications', label: 'Notifications & Alertes', icon: Bell },
+    { id: 'pos', label: 'Caisse & service', icon: Store },
+    { id: 'pos_admin', label: 'Paramétrage caisse', icon: SlidersHorizontal },
     { id: 'sales_mgmt', label: 'Gestion des ventes', icon: Receipt },
     { id: 'stock', label: 'Stock', icon: Boxes },
     { id: 'expenses_mgmt', label: 'Gestion des dépenses', icon: Receipt },
@@ -270,6 +284,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'activity_log', label: "Journal d'activité", icon: History },
   ].filter((item) => {
     const source = allMenuItemsById.get(item.id);
+    if (!source && item.id === 'pos_admin') return false;
     return source ? isMenuItemVisible(source) : true;
   });
 
