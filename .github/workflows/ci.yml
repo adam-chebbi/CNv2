@@ -1,0 +1,43 @@
+# Checks every push and pull request: types (interface + server), API tests, production build.
+# No secret is needed: the tests run on a throwaway SQLite database.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    env:
+      TZ: Africa/Tunis
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run server:typecheck
+      - run: npm test
+      - run: npm run build
+
+  historique:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: historique
+    env:
+      TZ: Africa/Tunis
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: historique/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
