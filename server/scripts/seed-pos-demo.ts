@@ -78,7 +78,25 @@ db.transaction(() => {
   ).run(randomUUID(), now);
   db.prepare("INSERT INTO faq_entries (id, question, answer, sort, published, updated_by, updated_at) VALUES (?, 'Proposez-vous du lait végétal ?', 'Oui : lait d''avoine et lait d''amande, en supplément.', 0, 1, 'Démo', ?)").run(randomUUID(), now);
   db.prepare("INSERT INTO equipment (id, name, category, in_service_date, value_mil, residual_mil, duration_months, status, created_by, created_at) VALUES (?, 'Machine espresso (démo)', 'Machines', '2026-01-01', 6000000, 0, 60, 'active', 'Démo', ?)").run(randomUUID(), now);
+  // A customer account to try the QR page, the customer space, loyalty and bookings.
+  if (!db.prepare("SELECT 1 FROM customers WHERE email = 'client.demo@cafenoir.tn'").get()) {
+    const customerId = randomUUID();
+    db.prepare(
+      `INSERT INTO customers (id, first_name, last_name, email, phone, password_hash, status, created_at, updated_at)
+       VALUES (?, 'Client', 'Démo', 'client.demo@cafenoir.tn', '22000000', ?, 'active', ?, ?)`
+    ).run(customerId, hashPassword('demo1234'), now, now);
+    db.prepare("INSERT INTO loyalty_ledger (id, customer_id, type, points, reason, created_by, created_at) VALUES (?, ?, 'adjust', 120, 'Points de démonstration', 'Démo', ?)").run(randomUUID(), customerId, now);
+  }
+
+  // Address printed in the table QR codes (e.g. PUBLIC_APP_URL=https://testv2.cafenoir.tn).
+  if (process.env.PUBLIC_APP_URL) {
+    db.prepare(
+      `INSERT INTO pos_settings (key, value, updated_at, updated_by) VALUES ('public_app_url', ?, ?, 'Démo')
+       ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`
+    ).run(process.env.PUBLIC_APP_URL.replace(/\/$/, ''), now);
+  }
+
   db.prepare('INSERT INTO pos_settings (key, value, updated_at) VALUES (?, ?, ?)').run(FLAG, '1', now);
 })();
 
-console.log('Données de démonstration chargées. Comptes : CIN 90000001 à 90000007, mot de passe « demo1234 ».');
+console.log('Données de démonstration chargées. Comptes : CIN 90000001 à 90000007, mot de passe « demo1234 ». Client : client.demo@cafenoir.tn / demo1234.');
