@@ -57,7 +57,9 @@ interface PermissionRow {
   permission_key: string;
 }
 
-export const SESSION_COOKIE = 'session';
+// Overridable so a test instance on another *.cafenoir.tn host never collides with the production
+// cookie (which is scoped to .cafenoir.tn and therefore also sent to the test host).
+export const SESSION_COOKIE = process.env.SESSION_COOKIE_NAME || 'session';
 
 // Shared by requireAuth and requireAuthAllowPendingPasswordChange — resolves the session cookie to
 // a full AuthedUser (or throws 401), without deciding whether must_change_password should block
