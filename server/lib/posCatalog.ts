@@ -28,6 +28,7 @@ interface ArticleRow {
   price_includes_tax: number | null;
   availability: string;
   prep_destination: string | null;
+  prep_target_minutes: number | null;
 }
 
 interface ExtraRow {
@@ -77,11 +78,12 @@ export const toPricedArticle = (row: ArticleRow): PricedArticle => {
     variantLabel: variants.label,
     variants: variants.options.map((v) => ({ id: v.id, label: v.label, deltaMil: toMillimes(v.priceDelta ?? 0) })),
     extraIds: row.extra_ids ? fromJson<string[]>(row.extra_ids, []) : [],
+    prepTargetMinutes: row.prep_target_minutes ?? undefined,
   };
 };
 
 const ARTICLE_COLUMNS = `id, name, category, sub_category, price, description, image_url, extra_ids, variants, vat_rate,
-  price_includes_tax, availability, prep_destination`;
+  price_includes_tax, availability, prep_destination, prep_target_minutes`;
 
 export const loadPricingCatalog = (): PricingCatalog => {
   const articles = (db.prepare(`SELECT ${ARTICLE_COLUMNS} FROM catalog_articles ORDER BY created_at ASC, rowid ASC`).all() as ArticleRow[]).map(toPricedArticle);

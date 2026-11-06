@@ -119,6 +119,7 @@ export const MenuSettingsPage: React.FC = () => {
                 <th>Prix</th>
                 <th>Disponibilité</th>
                 <th>Préparation</th>
+                <th>Temps cible</th>
                 <th>Allergènes</th>
                 <th>Variantes</th>
               </tr>
@@ -143,6 +144,19 @@ export const MenuSettingsPage: React.FC = () => {
                         <option value="kitchen">Cuisine</option>
                         <option value="none">Servi direct</option>
                       </select>
+                    </td>
+                    <td>
+                      <input
+                        className={cx(inputCls, 'min-h-[36px] py-1 w-20')}
+                        inputMode="numeric"
+                        placeholder="min"
+                        defaultValue={a.prepTargetMinutes ?? ''}
+                        aria-label={`Temps de préparation cible de ${a.name} (minutes)`}
+                        onBlur={(e) => {
+                          const v = e.target.value.trim() ? Number(e.target.value.replace(/\D/g, '')) : null;
+                          if (v !== (a.prepTargetMinutes ?? null)) void patch(a, { prepTargetMinutes: v && v > 0 ? v : null });
+                        }}
+                      />
                     </td>
                     <td>
                       <Btn size="sm" variant="ghost" onClick={() => setAllergenFor(a)}>

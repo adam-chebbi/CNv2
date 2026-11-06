@@ -33,6 +33,7 @@ posCatalogRouter.get('/catalog', requireAnyPermission(...CATALOG_READERS), async
 const articlePatchSchema = z.object({
   availability: z.enum(['available', 'unavailable', 'hidden']).optional(),
   prepDestination: z.enum(['kitchen', 'bar', 'none']).optional(),
+  prepTargetMinutes: z.number().int().min(1).max(240).nullable().optional(),
 });
 
 // Availability can be switched from the cash register (out of stock during service); the
@@ -41,7 +42,7 @@ posCatalogRouter.patch('/catalog/articles/:id', requireAnyPermission('products:m
   const body = articlePatchSchema.parse(req.body);
   const user = req.user!;
   const canManage = user.isSuperAdmin || user.permissions.includes('products:manage');
-  if (body.prepDestination && !canManage) throw new ApiError(403, "Vous n'avez pas la permission de modifier la destination de préparation.");
+  if ((body.prepDestination || body.prepTargetMinutes !== undefined) && !canManage) throw new ApiError(403, "Vous n'avez pas la permission de modifier la destination de préparation.");
   if (body.availability === 'hidden' && !canManage) throw new ApiError(403, "Seule la gestion des produits peut masquer un produit.");
 
   const before = db.prepare('SELECT id, name, availability, prep_destination FROM catalog_articles WHERE id = ?').get(req.params.id) as
@@ -58,6 +59,7 @@ posCatalogRouter.patch('/catalog/articles/:id', requireAnyPermission('products:m
       );
     }
     if (body.prepDestination) db.prepare('UPDATE catalog_articles SET prep_destination = ? WHERE id = ?').run(body.prepDestination, before.id);
+    if (body.prepTargetMinutes !== undefined) db.prepare('UPDATE catalog_articles SET prep_target_minutes = ? WHERE id = ?').run(body.prepTargetMinutes, before.id);
     recordActivity('Produits', 'Disponibilité', `${before.name} — ${[body.availability, body.prepDestination].filter(Boolean).join(', ')}`, user.fullName, {
       userId: user.id,
       entityType: 'catalog_article',

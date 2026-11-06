@@ -37,6 +37,7 @@ export interface PricedArticle {
   variantLabel?: string; // e.g. "Taille" — set when the article has variants
   variants: PricedVariant[]; // when non-empty, choosing exactly one is mandatory
   extraIds: string[]; // extras allowed on this article
+  prepTargetMinutes?: number; // expected preparation time (kitchen/bar screens)
 }
 
 export interface PricingCatalog {

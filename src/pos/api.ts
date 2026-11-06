@@ -42,7 +42,7 @@ export type DiscountInput = Omit<Discount, 'id' | 'createdAt' | 'createdBy' | 'c
 
 export const posApi = {
   catalog: (all = false) => apiGet<PosCatalog>(`/pos/catalog${all ? '?all=1' : ''}`),
-  setArticle: (id: string, patch: { availability?: PricedArticle['availability']; prepDestination?: PricedArticle['prepDestination'] }) =>
+  setArticle: (id: string, patch: { availability?: PricedArticle['availability']; prepDestination?: PricedArticle['prepDestination']; prepTargetMinutes?: number | null }) =>
     apiPatch<PricedArticle>(`/pos/catalog/articles/${id}`, patch),
   setIncompatibilities: (pairs: [string, string][]) => apiPut<{ pairs: [string, string][] }>('/pos/catalog/incompatibilities', { pairs }),
   quote: (lines: CartLineInput[], customerId?: string | null) => apiPost<PricedCart>('/pos/quote', { lines, customerId }),
@@ -120,7 +120,8 @@ export const posApi = {
   setCovers: (visitId: string, covers: number) => apiPatch<VisitDetail>(`/pos/visits/${visitId}`, { covers }),
   regenerateCode: (visitId: string) => apiPost<VisitDetail>(`/pos/visits/${visitId}/regenerate-code`),
   closeVisit: (visitId: string) => apiPost<VisitDetail>(`/pos/visits/${visitId}/close`),
-  staffOrder: (visitId: string, lines: CartLineInput[], key: string) => apiPostOnce<VisitDetail>(`/pos/visits/${visitId}/orders`, { lines }, key),
+  staffOrder: (visitId: string, lines: (CartLineInput & { hold?: boolean })[], key: string, urgent = false) =>
+    apiPostOnce<VisitDetail>(`/pos/visits/${visitId}/orders`, { lines, urgent }, key),
   acceptOrder: (orderId: string) => apiPost<Order>(`/pos/orders/${orderId}/accept`),
   rejectOrder: (orderId: string, reason: string) => apiPost<Order>(`/pos/orders/${orderId}/reject`, { reason }),
   requestOrderChange: (orderId: string, message: string, lines: CartLineInput[]) => apiPost<Order>(`/pos/orders/${orderId}/request-change`, { message, lines }),
