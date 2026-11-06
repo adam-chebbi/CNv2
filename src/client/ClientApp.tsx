@@ -4,6 +4,7 @@ import { AccountPage } from './AccountPage';
 import { clientApi, type Me } from './clientApi';
 import { ReservePage } from './ReservePage';
 import { TablePage } from './TablePage';
+import { CustomerDisplayPage, ReadyBoardPage } from './DisplayPages';
 
 // Customer pages, served by the same application under public paths (no staff login):
 //   /t/<code-table>  menu, ordering and services from the table's QR code
@@ -12,6 +13,14 @@ import { TablePage } from './TablePage';
 
 export const ClientApp: React.FC = () => {
   const path = window.location.pathname;
+  // Customer-facing screens (amélioration 07): full screen, no account.
+  if (path.startsWith('/commandes-pretes')) return <ReadyBoardPage />;
+  const displayRegister = /^\/ecran-client\/([^/]+)/.exec(path)?.[1];
+  if (displayRegister) return <CustomerDisplayPage registerId={decodeURIComponent(displayRegister)} />;
+  return <ClientPages path={path} />;
+};
+
+const ClientPages: React.FC<{ path: string }> = ({ path }) => {
   const [me, setMe] = useState<Me | null>(null);
   const [ready, setReady] = useState(false);
   useEffect(() => {

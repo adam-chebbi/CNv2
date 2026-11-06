@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Settings2 } from 'lucide-react';
 import type { PosSettings } from '../data/posSettings';
 import { posApi } from './api';
+import { DisplayLinks } from './DisplayLinks';
 import { Btn, Card, ErrorNote, Field, inputCls, Loading, PageHeader, useAction, useLoader } from './ui';
 
 // Paramètres de la caisse et du service (cahier des charges §17.1, §20.3).
@@ -51,6 +52,7 @@ export const PosSettingsPage: React.FC = () => {
           <input className={inputCls} value={s.googleReviewUrl} onChange={(e) => set({ googleReviewUrl: e.target.value.trim() })} placeholder="https://g.page/r/…/review" />
         </Field>
       </Card>
+      <DisplayLinks />
       <Card title="Réservations">
         <div className="grid sm:grid-cols-2 gap-3">
           <Field label="Ouverture"><input type="time" className={inputCls} value={s.openingTime} onChange={(e) => set({ openingTime: e.target.value })} /></Field>

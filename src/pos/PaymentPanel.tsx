@@ -182,6 +182,24 @@ export const PaymentPanel: React.FC<{ sale: SaleDetail; sessionId: string | null
     setSale(s);
     onUpdated?.(s);
   };
+
+  // Customer display (amélioration 07): what is due, what was paid, the change.
+  useEffect(() => {
+    if (!registerId) return;
+    const lines = sale.orders.filter((o) => o.status === 'validated').flatMap((o) => o.lines.filter((l) => l.status === 'active')).map((l) => ({ name: l.displayName, quantity: l.quantity, totalMil: l.totalMil }));
+    void posApi
+      .publishDisplay(registerId, {
+        mode: sale.status === 'completed' ? 'thanks' : 'payment',
+        lines,
+        discountMil: sale.discountMil,
+        totalMil: sale.totalMil,
+        paidMil: sale.paidMil,
+        dueMil: sale.dueMil,
+        changeMil: lastChange ?? 0,
+        pickupNumber: sale.pickupNumber ?? null,
+      })
+      .catch(() => undefined);
+  }, [sale, lastChange, registerId]);
   const entered = parseDtInput(amount);
   const due = sale.dueMil;
   const effective = entered ?? due;

@@ -42,6 +42,7 @@ import { setupStatusRouter } from './routes/setupStatus.js';
 import { recetteRouter } from './routes/recette.js';
 import { printingRouter } from './routes/printing.js';
 import { agentRouter } from './routes/agent.js';
+import { displaysPublicRouter, displaysRouter } from './routes/displays.js';
 import { purgeOldIdempotencyKeys } from './lib/idempotency.js';
 import { ensureCsrfCookie, csrfProtection } from './middleware/csrf.js';
 
@@ -95,6 +96,7 @@ export const createApp = (): express.Express => {
   app.use('/api/public', publicRouter);
   // Customer pages (QR code on the tables, customer account): no staff session, same reason.
   app.use('/api/client', clientRouter);
+  app.use('/api/client', displaysPublicRouter);
   app.use('/api/client', customerAccountRouter);
   app.use('/api/client', reservationsPublicRouter);
   // Same catalog under the shorter, storefront-friendly URL (exact path only — no /api/products/:id).
@@ -131,6 +133,7 @@ export const createApp = (): express.Express => {
   app.use('/api/pos', setupStatusRouter);
   app.use('/api/pos', recetteRouter);
   app.use('/api/pos', printingRouter);
+  app.use('/api/pos', displaysRouter);
 
   app.use(errorMiddleware);
 

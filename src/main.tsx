@@ -10,7 +10,7 @@ import { initUpdateManager } from './pwa/updateManager';
 import './index.css';
 
 // Customer pages (QR code on the tables, customer account, booking) are public: no staff login.
-const CLIENT_PATH = /^\/(t\/[^/]+|compte|reserver)\/?$/;
+const CLIENT_PATH = /^\/(t\/[^/]+|compte|reserver|commandes-pretes|ecran-client\/[^/]+)\/?$/;
 const ClientApp = lazy(() => import('./client/ClientApp').then((m) => ({ default: m.ClientApp })));
 
 // Deploy-safety: detects a new build in the background (service worker) and applies it either

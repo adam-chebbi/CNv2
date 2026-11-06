@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { ShoppingBag, Store, Utensils } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 import type { CartLineInput } from '../data/pricing';
@@ -31,6 +31,26 @@ export const RegisterPage: React.FC = () => {
     void discounts.reload();
   });
   usePosEvents(['cash.changed'], () => void cash.refresh(), 60_000);
+
+  // Customer display next to the register mirrors the cart (amélioration 07).
+  const registerId = cash.session?.registerId ?? null;
+  const pricingForDisplay = catalog.data ? toPricingCatalog(catalog.data) : null;
+  useEffect(() => {
+    if (!registerId || paying) return;
+    const t = window.setTimeout(() => {
+      let state: Record<string, unknown> = { mode: 'idle' };
+      if (lines.length > 0 && pricingForDisplay) {
+        try {
+          const cart = computeCart(lines, pricingForDisplay, discounts.data ?? [], { now: new Date() });
+          state = { mode: 'cart', lines: cart.lines.map((l) => ({ name: l.displayName, quantity: l.quantity, totalMil: l.totalMil })), discountMil: cart.discountMil, totalMil: cart.totalMil };
+        } catch {
+          state = { mode: 'idle' };
+        }
+      }
+      void posApi.publishDisplay(registerId, state).catch(() => undefined);
+    }, 300);
+    return () => window.clearTimeout(t);
+  }, [lines, registerId, paying]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const preview = useMemo(() => {
     if (!catalog.data || lines.length === 0) return null;
