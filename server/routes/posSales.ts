@@ -28,6 +28,7 @@ import { formatDt } from '../../src/data/money.js';
 import { PAYMENT_METHOD_LABELS } from '../../src/data/cashSession.js';
 import { applyTicketDiscounts, tunisClock } from '../../src/data/pricing.js';
 import { loadActiveDiscountRules } from '../lib/posCatalog.js';
+import { queueDrawer, queueReceipt } from '../lib/printing.js';
 
 // Ventes et encaissements (cahier des charges §2): counter sales, bills, payments, tickets.
 
@@ -131,6 +132,8 @@ posSalesRouter.post('/sales/:id/payments', requirePermission('pos:collect'), (re
   runIdempotent(req, res, `payment:${req.params.id}`, () => {
     const session = getOpenSession(body.sessionId);
     const { sale, payment } = recordPayment(req.params.id, session.id, body, actorOf(user));
+    // Cash: the drawer opens if one is connected to this register's printer (amélioration 04).
+    if (body.method === 'cash') queueDrawer(session.register_id, payment.id, user.fullName);
     recordActivity(
       'Caisse',
       'Règlement',
@@ -208,6 +211,7 @@ posSalesRouter.post('/sales/:id/print', requireAnyPermission('pos:sell', 'pos:co
   if (sale.status !== 'completed') throw new ApiError(409, "Le ticket n'est disponible qu'une fois la vente réglée.");
   const printed = (db.prepare('SELECT COUNT(*) AS n FROM pos_ticket_prints WHERE sale_id = ?').get(sale.id) as { n: number }).n;
   const duplicate = printed > 0;
+  let queued = false;
   if (duplicate && !hasPermission(user, 'pos:reprint')) throw new ApiError(403, "Vous n'avez pas la permission de réimprimer un ticket.");
   db.transaction(() => {
     db.prepare('INSERT INTO pos_ticket_prints (id, sale_id, duplicate, printed_by, printed_at) VALUES (?, ?, ?, ?, ?)').run(
@@ -217,10 +221,12 @@ posSalesRouter.post('/sales/:id/print', requireAnyPermission('pos:sell', 'pos:co
       user.fullName,
       new Date().toISOString()
     );
+    // On the register's printer when one is configured; otherwise the screen prints via the browser.
+    queued = queueReceipt(sale.id, duplicate ? printed : 0, user.fullName);
     if (duplicate) {
       db.prepare('UPDATE pos_sales SET reprint_count = reprint_count + 1 WHERE id = ?').run(sale.id);
       recordActivity('Caisse', 'Réimpression', `Duplicata du ticket ${sale.ticket_number}`, user.fullName, { userId: user.id, entityType: 'pos_sale', entityId: sale.id });
     }
   })();
-  res.json({ duplicate, duplicateNumber: duplicate ? printed : 0, sale: saleDetail(sale.id) });
+  res.json({ duplicate, duplicateNumber: duplicate ? printed : 0, queued, sale: saleDetail(sale.id) });
 }));

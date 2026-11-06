@@ -12,6 +12,7 @@ import { registerTableStateProvider, registerVisitCloseBlocker } from '../lib/fl
 import { registerActionProvider } from './serviceDesk.js';
 import { actorOf, getSaleRow, recomputeSale, saleDetail, type LineRow, type PrepStatus } from '../lib/posService.js';
 import { restoreStockForLine } from '../lib/stockConsumption.js';
+import { queueCancelTickets } from '../lib/printing.js';
 import { getOpenSession } from './cashSessions.js';
 import { formatDt } from '../../src/data/money.js';
 import { PAYMENT_METHOD_LABELS } from '../../src/data/cashSession.js';
@@ -204,6 +205,8 @@ cancellationsRouter.post('/cancellations/:id/approve', requirePermission('cancel
       if (!isPrepared(line.prep_status)) restoreStockForLine(line.id, user.fullName, `Annulation approuvée — ${request.reason}`);
     });
     const treatment: Treatment = prepared.length > 0 ? body.stockTreatment! : 'restored';
+    // Items the kitchen/bar already received get an "ANNULÉ" ticket at that station (amélioration 03).
+    queueCancelTickets(request.id, target.lines.filter((l) => l.sent_to_prep_at).map((l) => l.id), request.reason, user.fullName);
     db.prepare(
       `UPDATE cancellation_requests SET status = 'approved', decided_by_id = ?, decided_by = ?, decided_at = ?, decision_note = ?, stock_treatment = ?, stock_note = ? WHERE id = ?`
     ).run(user.id, user.fullName, now, body.note ?? null, treatment, body.stockNote ?? null, request.id);

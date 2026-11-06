@@ -667,9 +667,102 @@ export const applyPosSchema = (db: Db): void => {
   db.exec(CUSTOMER_SERVICES);
   db.exec(CUSTOMERS);
   db.exec(TEAM_AND_EQUIPMENT);
+  applyServiceUpgrades(db);
   // A register exists out of the box; more can be added from the settings.
   const hasRegister = db.prepare('SELECT 1 FROM cash_registers LIMIT 1').get();
   if (!hasRegister) {
     db.prepare('INSERT INTO cash_registers (id, name, active, created_at) VALUES (?, ?, 1, ?)').run('register-main', 'Caisse principale', new Date().toISOString());
+  }
+};
+
+// ---------------------------------------------------------------- Impression, hors ligne, KDS, écrans
+// Printing (print agents, printers, print jobs), offline sales, kitchen display upgrades and the
+// customer-facing screens. Additive, like everything above.
+const SERVICE_UPGRADES = `
+-- Program installed on the register PC that prints on the café's printers (ESC/POS) and opens
+-- the cash drawer. Authenticated by a token whose hash only is kept.
+CREATE TABLE IF NOT EXISTS print_agents (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  token_hash TEXT NOT NULL UNIQUE,
+  version TEXT,
+  last_seen_at TEXT,
+  revoked_at TEXT,
+  created_by TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+
+-- target: 'kitchen' | 'bar' | 'register:<register id>' — what the printer prints.
+CREATE TABLE IF NOT EXISTS printers (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  agent_id TEXT REFERENCES print_agents(id),
+  target TEXT NOT NULL,
+  address TEXT NOT NULL,
+  paper_width INTEGER NOT NULL DEFAULT 80 CHECK (paper_width IN (58, 80)),
+  copies INTEGER NOT NULL DEFAULT 1 CHECK (copies BETWEEN 1 AND 3),
+  auto_print INTEGER NOT NULL DEFAULT 1,
+  cash_drawer INTEGER NOT NULL DEFAULT 0,
+  active INTEGER NOT NULL DEFAULT 1,
+  status TEXT,
+  status_at TEXT,
+  created_at TEXT NOT NULL
+);
+
+-- Every document to print. The content is frozen when the job is created: a later catalogue
+-- change never alters a ticket already sent.
+CREATE TABLE IF NOT EXISTS print_jobs (
+  id TEXT PRIMARY KEY,
+  kind TEXT NOT NULL CHECK (kind IN ('prep', 'bill', 'receipt', 'cancel', 'drawer', 'test')),
+  target TEXT NOT NULL,
+  ref_id TEXT,
+  payload TEXT NOT NULL,
+  status TEXT NOT NULL CHECK (status IN ('queued', 'printing', 'printed', 'failed')),
+  attempts INTEGER NOT NULL DEFAULT 0,
+  last_error TEXT,
+  printer_id TEXT,
+  duplicate_of TEXT,
+  created_by TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  printed_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_print_jobs_queue ON print_jobs(target, status);
+-- One automatic job per document (a replay never prints twice); duplicates are explicit.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_print_jobs_once ON print_jobs(kind, ref_id, target) WHERE duplicate_of IS NULL AND ref_id IS NOT NULL;
+`;
+
+const applyServiceUpgrades = (db: Db): void => {
+  db.exec(SERVICE_UPGRADES);
+
+  // Takeaway / counter pickup number (shown on the ticket, the prep ticket and the "ready" board).
+  addColumn(db, 'pos_orders', 'pickup_number', 'pickup_number INTEGER');
+  addColumn(db, 'pos_orders', 'priority', 'priority INTEGER NOT NULL DEFAULT 0');
+  // Lines held back by the waiter ("à envoyer plus tard") and sent to preparation later.
+  addColumn(db, 'pos_order_lines', 'fire_status', "fire_status TEXT NOT NULL DEFAULT 'now'");
+  addColumn(db, 'catalog_articles', 'prep_target_minutes', 'prep_target_minutes INTEGER');
+  // Sales recorded while the register was offline, synchronised later.
+  addColumn(db, 'pos_sales', 'offline_ref', 'offline_ref TEXT');
+  addColumn(db, 'pos_sales', 'occurred_at', 'occurred_at TEXT');
+  addColumn(db, 'pos_sales', 'client_total_mil', 'client_total_mil INTEGER');
+
+  // A held line gets its own dispatch when it is sent: an order may now have several prep tickets
+  // for the same station. SQLite cannot drop a UNIQUE constraint, so the small table is rebuilt once.
+  const ddl = (db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'prep_tickets'").get() as { sql: string } | undefined)?.sql ?? '';
+  if (ddl.includes('UNIQUE (order_id, destination)')) {
+    db.transaction(() => {
+      db.exec(`
+        CREATE TABLE prep_tickets_new (
+          id TEXT PRIMARY KEY,
+          order_id TEXT NOT NULL REFERENCES pos_orders(id),
+          destination TEXT NOT NULL CHECK (destination IN ('kitchen', 'bar')),
+          label TEXT NOT NULL,
+          sent_at TEXT NOT NULL
+        );
+        INSERT INTO prep_tickets_new (id, order_id, destination, label, sent_at) SELECT id, order_id, destination, label, sent_at FROM prep_tickets;
+        DROP TABLE prep_tickets;
+        ALTER TABLE prep_tickets_new RENAME TO prep_tickets;
+        CREATE INDEX IF NOT EXISTS idx_prep_tickets_order ON prep_tickets(order_id);
+      `);
+    })();
   }
 };

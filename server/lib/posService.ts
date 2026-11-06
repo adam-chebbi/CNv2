@@ -63,6 +63,9 @@ export interface SaleRow {
   completed_by: string | null;
   completed_at: string | null;
   reprint_count: number;
+  offline_ref: string | null;
+  occurred_at: string | null;
+  client_total_mil: number | null;
 }
 
 export interface OrderRow {
@@ -86,6 +89,8 @@ export interface OrderRow {
   validated_by: string | null;
   validated_at: string | null;
   updated_at: string;
+  pickup_number: number | null;
+  priority: number;
 }
 
 export interface LineRow {
@@ -117,6 +122,7 @@ export interface LineRow {
   prep_started_at: string | null;
   ready_at: string | null;
   served_at: string | null;
+  fire_status: 'now' | 'hold' | 'fired';
 }
 
 export interface PaymentRow {
@@ -213,6 +219,12 @@ export const createOrder = (input: CreateOrderInput): OrderRow => {
     now
   );
   insertLines(id, input.cart.lines);
+  // Counter / takeaway orders get a daily pickup number (ticket, prep ticket, "ready" board).
+  if (input.channel === 'counter') {
+    const dayStart = new Date(`${tunisClock(new Date()).date}T00:00:00+01:00`).toISOString();
+    const last = (db.prepare('SELECT MAX(pickup_number) AS n FROM pos_orders WHERE pickup_number IS NOT NULL AND created_at >= ?').get(dayStart) as { n: number | null }).n ?? 0;
+    db.prepare('UPDATE pos_orders SET pickup_number = ? WHERE id = ?').run(last + 1, id);
+  }
   return getOrderRow(id);
 };
 
@@ -293,28 +305,18 @@ export const validateOrder = (orderId: string, by: Actor): OrderRow => {
   db.prepare(
     `UPDATE pos_orders SET status = 'validated', sale_id = ?, validated_by_id = ?, validated_by = ?, validated_at = ?, updated_at = ? WHERE id = ?`
   ).run(saleId, by.id, by.name, now, now, orderId);
+  // Lines held back by the waiter ("à envoyer plus tard") are validated — price frozen, stock
+  // consumed — but reach the kitchen/bar only when they are sent (fireHeldLines).
   db.prepare(
     `UPDATE pos_order_lines SET responsible_waiter_id = ?, responsible_waiter_name = ?,
      prep_status = CASE WHEN prep_destination = 'none' THEN 'none' ELSE 'to_prepare' END,
-     sent_to_prep_at = CASE WHEN prep_destination = 'none' THEN NULL ELSE ? END
+     sent_to_prep_at = CASE WHEN prep_destination = 'none' OR fire_status = 'hold' THEN NULL ELSE ? END
      WHERE order_id = ? AND status = 'active'`
   ).run(waiter.id, waiter.name, now, orderId);
 
   const label = tableLabel(order.visit_id) ?? (order.service_type === 'takeaway' ? 'À emporter' : 'Comptoir');
   const lines = linesOfOrder(orderId).filter((l) => l.status === 'active');
-  (['kitchen', 'bar'] as const).forEach((destination) => {
-    const forStation = lines.filter((l) => l.prep_destination === destination);
-    if (forStation.length === 0) return;
-    const ticketId = randomUUID();
-    db.prepare('INSERT INTO prep_tickets (id, order_id, destination, label, sent_at) VALUES (?, ?, ?, ?, ?)').run(
-      ticketId,
-      orderId,
-      destination,
-      `${label} · n°${order.order_number}`,
-      now
-    );
-    db.prepare(`UPDATE pos_order_lines SET prep_ticket_id = ? WHERE order_id = ? AND prep_destination = ? AND status = 'active'`).run(ticketId, orderId, destination);
-  });
+  dispatchToStations(order, lines.filter((l) => l.fire_status !== 'hold'), label, now);
 
   consumeStockForLines(
     lines.map((l) => {
@@ -327,6 +329,48 @@ export const validateOrder = (orderId: string, by: Actor): OrderRow => {
   if (order.customer_id) db.prepare('UPDATE pos_sales SET customer_id = COALESCE(customer_id, ?) WHERE id = ?').run(order.customer_id, saleId);
   recomputeSale(saleId);
   return getOrderRow(orderId);
+};
+
+// One prep ticket per station for the given lines; returns the created ticket ids.
+type DispatchHook = (prepTicketIds: string[]) => void;
+const dispatchHooks: DispatchHook[] = [];
+// Printing registers here to print the kitchen/bar tickets of each dispatch (amélioration 03).
+export const onPrepDispatched = (hook: DispatchHook): void => {
+  dispatchHooks.push(hook);
+};
+
+const dispatchToStations = (order: OrderRow, lines: LineRow[], label: string, now: string): string[] => {
+  const ids: string[] = [];
+  (['kitchen', 'bar'] as const).forEach((destination) => {
+    const forStation = lines.filter((l) => l.prep_destination === destination);
+    if (forStation.length === 0) return;
+    const ticketId = randomUUID();
+    db.prepare('INSERT INTO prep_tickets (id, order_id, destination, label, sent_at) VALUES (?, ?, ?, ?, ?)').run(
+      ticketId,
+      order.id,
+      destination,
+      `${label} · n°${order.order_number}`,
+      now
+    );
+    const update = db.prepare('UPDATE pos_order_lines SET prep_ticket_id = ? WHERE id = ?');
+    forStation.forEach((l) => update.run(ticketId, l.id));
+    ids.push(ticketId);
+  });
+  if (ids.length > 0) dispatchHooks.forEach((hook) => hook(ids));
+  return ids;
+};
+
+// Sends the held lines of a validated order to preparation (the "suite").
+export const fireHeldLines = (orderId: string): string[] => {
+  const order = getOrderRow(orderId);
+  if (order.status !== 'validated') throw new ApiError(409, "Cette commande n'est pas validée.");
+  const held = linesOfOrder(orderId).filter((l) => l.status === 'active' && l.fire_status === 'hold');
+  if (held.length === 0) throw new ApiError(409, 'Aucun article en attente pour cette commande.');
+  const now = nowIso();
+  const update = db.prepare("UPDATE pos_order_lines SET fire_status = 'fired', sent_to_prep_at = CASE WHEN prep_destination = 'none' THEN NULL ELSE ? END WHERE id = ?");
+  held.forEach((l) => update.run(now, l.id));
+  const label = tableLabel(order.visit_id) ?? (order.service_type === 'takeaway' ? 'À emporter' : 'Comptoir');
+  return dispatchToStations(order, linesOfOrder(orderId).filter((l) => held.some((h) => h.id === l.id)), label, now);
 };
 
 // --- Bills ----------------------------------------------------------------------------------
@@ -500,6 +544,7 @@ export const serializeLine = (l: LineRow) => ({
   sentToPrepAt: l.sent_to_prep_at,
   readyAt: l.ready_at,
   servedAt: l.served_at,
+  fireStatus: l.fire_status,
 });
 
 export const serializeOrder = (o: OrderRow) => ({
@@ -519,6 +564,8 @@ export const serializeOrder = (o: OrderRow) => ({
   createdAt: o.created_at,
   validatedBy: o.validated_by,
   validatedAt: o.validated_at,
+  pickupNumber: o.pickup_number,
+  urgent: o.priority > 0,
   lines: linesOfOrder(o.id).map(serializeLine),
 });
 
@@ -562,6 +609,10 @@ export const saleDetail = (saleId: string) => {
     completedAt: sale.completed_at,
     completedBy: sale.completed_by,
     reprintCount: sale.reprint_count,
+    printCount: (db.prepare('SELECT COUNT(*) AS n FROM pos_ticket_prints WHERE sale_id = ?').get(sale.id) as { n: number }).n,
+    pickupNumber: orders.find((o) => o.pickup_number)?.pickup_number ?? null,
+    offlineRef: sale.offline_ref,
+    occurredAt: sale.occurred_at,
     orders: orders.map(serializeOrder),
     payments: payments.map(serializePayment),
   };

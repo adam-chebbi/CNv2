@@ -7,7 +7,9 @@ export type PosEventType =
   | 'actions.changed'
   | 'catalog.changed'
   | 'cash.changed'
-  | 'reservations.changed';
+  | 'reservations.changed'
+  | 'print.changed'
+  | 'display.changed';
 
 export interface PosEvent {
   type: PosEventType;

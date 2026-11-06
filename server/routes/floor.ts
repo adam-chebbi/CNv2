@@ -8,7 +8,7 @@ import { recordActivity } from '../lib/activity.js';
 import { emitPosEvent } from '../lib/events.js';
 import { runIdempotent } from '../lib/idempotency.js';
 import { assertTableAccess, assignedTableIds, canSeeAllTables, currentWaiterOfTable } from '../lib/posAccess.js';
-import { actorOf, createOrder, openSaleForVisit, pendingOrdersOfVisit, priceCart, saleDetail, validateOrder, type OrderRow } from '../lib/posService.js';
+import { actorOf, createOrder, fireHeldLines, openSaleForVisit, pendingOrdersOfVisit, priceCart, saleDetail, validateOrder, type OrderRow } from '../lib/posService.js';
 import { serializeOrder } from '../lib/posService.js';
 import { cartLineSchema } from './posCatalog.js';
 import { visitCloseBlockers, floorExtensions, runVisitClosedHooks } from '../lib/floorState.js';
@@ -492,7 +492,12 @@ floorRouter.post('/visits/:id/close', requirePermission('visits:manage'), asyncH
 
 // --- Staff orders on a table ------------------------------------------------------------------------
 
-const staffOrderSchema = z.object({ lines: z.array(cartLineSchema).min(1).max(100), note: z.string().trim().max(300).optional() });
+// hold: items sent to the kitchen/bar later ("suite", e.g. the dessert) — amélioration 06.
+const staffOrderSchema = z.object({
+  lines: z.array(cartLineSchema.extend({ hold: z.boolean().optional() })).min(1).max(100),
+  note: z.string().trim().max(300).optional(),
+  urgent: z.boolean().optional(),
+});
 
 // An order taken by the staff is validated immediately (only QR orders wait for validation).
 floorRouter.post('/visits/:id/orders', requirePermission('orders:take'), (req, res) => {
@@ -506,6 +511,11 @@ floorRouter.post('/visits/:id/orders', requirePermission('orders:take'), (req, r
     const cart = priceCart(body.lines);
     const sale = openSaleForVisit(visit.id, by);
     const order = createOrder({ channel: 'staff', serviceType: 'dine_in', visitId: visit.id, saleId: sale.id, status: 'pending_validation', note: body.note, cart, createdBy: by });
+    // Lines are stored in cart order: position i is body.lines[i].
+    body.lines.forEach((l, i) => {
+      if (l.hold) db.prepare("UPDATE pos_order_lines SET fire_status = 'hold' WHERE order_id = ? AND position = ?").run(order.id, i);
+    });
+    if (body.urgent) db.prepare('UPDATE pos_orders SET priority = 1 WHERE id = ?').run(order.id);
     validateOrder(order.id, by);
     recordActivity('Commandes', 'Commande', `${getTable(visit.table_id).name} — commande n°${order.order_number}`, user.fullName, { userId: user.id, entityType: 'pos_order', entityId: order.id });
     return { status: 201, body: visitDetail(getVisit(visit.id)) };
@@ -513,3 +523,33 @@ floorRouter.post('/visits/:id/orders', requirePermission('orders:take'), (req, r
   emitPosEvent({ type: 'prep.changed' });
   emitPosEvent({ type: 'floor.changed', visitId: visit.id });
 });
+
+// --- Held lines and urgency (amélioration 06) -----------------------------------------------------
+
+const orderOfAccessibleVisit = (user: NonNullable<Express.Request['user']>, orderId: string) => {
+  const order = db.prepare('SELECT id, visit_id FROM pos_orders WHERE id = ?').get(orderId) as { id: string; visit_id: string | null } | undefined;
+  if (!order) throw notFound('Commande');
+  if (order.visit_id) assertTableAccess(user, getVisit(order.visit_id).table_id);
+  return order;
+};
+
+// Sends the held items of an order (the "suite") to the kitchen/bar now.
+floorRouter.post('/orders/:id/fire', requirePermission('orders:take'), asyncHandler((req, res) => {
+  const order = orderOfAccessibleVisit(req.user!, req.params.id);
+  const tickets = db.transaction(() => {
+    const ids = fireHeldLines(order.id);
+    recordActivity('Commandes', 'Suite envoyée', `Commande ${order.id.slice(0, 8)} — ${ids.length} bon(s)`, req.user!.fullName, { userId: req.user!.id, entityType: 'pos_order', entityId: order.id });
+    return ids;
+  })();
+  emitPosEvent({ type: 'prep.changed' });
+  emitPosEvent({ type: 'floor.changed', visitId: order.visit_id ?? undefined });
+  res.json({ prepTickets: tickets });
+}));
+
+floorRouter.post('/orders/:id/priority', requirePermission('orders:take'), asyncHandler((req, res) => {
+  const { urgent } = z.object({ urgent: z.boolean() }).parse(req.body);
+  const order = orderOfAccessibleVisit(req.user!, req.params.id);
+  db.prepare('UPDATE pos_orders SET priority = ? WHERE id = ?').run(urgent ? 1 : 0, order.id);
+  emitPosEvent({ type: 'prep.changed' });
+  res.json({ ok: true });
+}));
