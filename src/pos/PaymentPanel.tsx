@@ -6,7 +6,7 @@ import { CASH_STEP_MILLIMES, formatDt, parseDtInput } from '../data/money';
 import { PAYMENT_METHOD_LABELS, type PaymentMethod } from '../data/cashSession';
 import { newIdempotencyKey } from '../hooks/usePosEvents';
 import { posApi, type CustomerSummary, type SaleDetail } from './api';
-import { printTicket } from './ticket';
+import { printBill, printTicket } from './ticket';
 import { Badge, Btn, cx, ErrorNote, Field, inputCls, Modal, Money, useAction } from './ui';
 
 // Encaissement d'une vente ou d'une addition (cahier des charges §2.5): one or several payments,
@@ -168,14 +168,14 @@ const DiscountBox: React.FC<{ sale: SaleDetail; onChange: (s: SaleDetail) => voi
   );
 };
 
-export const PaymentPanel: React.FC<{ sale: SaleDetail; sessionId: string | null; onClose: () => void; onUpdated?: (s: SaleDetail) => void }> = ({ sale: initial, sessionId, onClose, onUpdated }) => {
+export const PaymentPanel: React.FC<{ sale: SaleDetail; sessionId: string | null; registerId?: string | null; onClose: () => void; onUpdated?: (s: SaleDetail) => void }> = ({ sale: initial, sessionId, registerId, onClose, onUpdated }) => {
   const { hasPermission } = useAuth();
   const [sale, setSale] = useState(initial);
   const [method, setMethod] = useState<PaymentMethod>('cash');
   const [amount, setAmount] = useState('');
   const [lastChange, setLastChange] = useState<number | null>(null);
   const [payKey, setPayKey] = useState(newIdempotencyKey);
-  const [printed, setPrinted] = useState(initial.reprintCount > 0);
+  const [printed, setPrinted] = useState(initial.printCount > 0);
   const { busy, error, run } = useAction();
 
   const update = (s: SaleDetail) => {
@@ -206,7 +206,8 @@ export const PaymentPanel: React.FC<{ sale: SaleDetail; sessionId: string | null
       const res = await posApi.print(sale.id);
       update(res.sale);
       setPrinted(true);
-      printTicket(res.sale, res.duplicateNumber);
+      // Printed by the register printer through the print agent, or here through the browser.
+      if (!res.queued) await printTicket(res.sale, res.duplicateNumber);
     });
 
   const lines = sale.orders.filter((o) => o.status === 'validated').flatMap((o) => o.lines.filter((l) => l.status === 'active'));
@@ -303,7 +304,12 @@ export const PaymentPanel: React.FC<{ sale: SaleDetail; sessionId: string | null
               <Btn variant="primary" size="lg" className="w-full" busy={busy} disabled={!hasPermission('pos:collect') || effective <= 0} onClick={pay}>
                 Encaisser <Money mil={method === 'cash' ? Math.min(effective, due) : effective} />
               </Btn>
-              <div className="flex flex-wrap gap-2">{hasPermission('pos:discount') && <DiscountBox sale={sale} onChange={update} />}</div>
+              <div className="flex flex-wrap gap-2">
+                {hasPermission('pos:discount') && <DiscountBox sale={sale} onChange={update} />}
+                <Btn size="sm" busy={busy} onClick={() => run(async () => { const r = await posApi.printBill(sale.id, registerId ?? null, sessionId); if (!r.queued) await printBill(sale); })}>
+                  <Printer size={14} /> Imprimer l'addition
+                </Btn>
+              </div>
               <CustomerBox sale={sale} onChange={update} />
             </>
           )}

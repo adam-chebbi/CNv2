@@ -208,15 +208,19 @@ printingRouter.post('/prep-tickets/:id/reprint', asyncHandler((req, res) => {
       else enqueueJob('prep', input.destination, req.params.id, prepTicketDocument(input), req.user!.fullName);
       queued = true;
     }
-    recordActivity('Impression', 'Duplicata bon', `${input.label} n°${input.orderNumber}`, req.user!.fullName, { userId: req.user!.id });
+    recordActivity('Impression', 'Réimpression bon', `${input.label} n°${input.orderNumber}`, req.user!.fullName, { userId: req.user!.id });
   })();
   res.json({ queued, document: doc });
 }));
 
 // Provisional bill ("addition"): on the register printer, or returned for browser printing.
 printingRouter.post('/sales/:id/print-bill', requireAnyPermission('pos:sell', 'pos:collect', 'orders:take'), asyncHandler((req, res) => {
-  const { registerId } = z.object({ registerId: z.string().nullable().optional() }).parse(req.body ?? {});
+  const body = z.object({ registerId: z.string().nullable().optional(), sessionId: z.string().nullable().optional() }).parse(req.body ?? {});
   const sale = getSaleRow(req.params.id);
+  const sessionRegister = body.sessionId
+    ? (db.prepare('SELECT register_id FROM cash_sessions WHERE id = ?').get(body.sessionId) as { register_id: string } | undefined)?.register_id
+    : undefined;
+  const registerId = body.registerId ?? sessionRegister ?? null;
   if (sale.status !== 'open') throw new ApiError(409, "L'addition n'est imprimable que tant qu'elle n'est pas réglée.");
   const queued = queueBill(sale.id, registerId ?? null, req.user!.fullName);
   res.json({ queued, document: billDocument(saleDetail(sale.id)) });

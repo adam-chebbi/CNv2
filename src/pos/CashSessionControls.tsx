@@ -269,6 +269,11 @@ export const SessionBar: React.FC<{ session: CashSessionDetail; onChange: (s: Ca
         {session.registerName} · ouverte par {session.openedBy} · fond <Money mil={session.openingFloatMil} />
       </span>
       {hasPermission('cash:movement') && (
+        <Btn size="sm" variant="ghost" onClick={() => { const reason = window.prompt("Motif de l'ouverture du tiroir (ex. rendu de monnaie, contrôle) :"); if (reason && reason.trim().length >= 2) void posApi.openDrawer(session.registerId, reason.trim()).catch((e: Error) => window.alert(e.message)); }}>
+          Ouvrir le tiroir
+        </Btn>
+      )}
+      {hasPermission('cash:movement') && (
         <Btn size="sm" onClick={() => setModal('movement')}>
           Mouvement d'espèces
         </Btn>

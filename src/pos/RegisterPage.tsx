@@ -8,6 +8,7 @@ import { posApi, type SaleDetail } from './api';
 import { addLine, CartLines, ProductGrid, toPricingCatalog } from './CartComposer';
 import { OpenSessionForm, SessionBar, useCashSession } from './CashSessionControls';
 import { PaymentPanel } from './PaymentPanel';
+import { PrintStatusBanner } from './PrintersPage';
 import { Btn, Card, cx, ErrorNote, Loading, Money, PageHeader, useAction, useLoader } from './ui';
 
 // Écran principal de caisse (cahier des charges §2.1 – §2.2): counter / takeaway sales. Table bills
@@ -71,6 +72,7 @@ export const RegisterPage: React.FC = () => {
       ) : (
         <>
           <SessionBar session={session} onChange={(s) => (s ? cash.setSession(s) : void cash.refresh())} />
+          <PrintStatusBanner />
           <div className="grid lg:grid-cols-[1fr_380px] gap-4 items-start">
             <Card>
               {catalog.data && (
@@ -120,6 +122,7 @@ export const RegisterPage: React.FC = () => {
         <PaymentPanel
           sale={paying}
           sessionId={session?.id ?? null}
+          registerId={session?.registerId ?? null}
           onClose={() => {
             setPaying(null);
             void cash.refresh();

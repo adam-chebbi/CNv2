@@ -77,7 +77,13 @@ export const posApi = {
     const params = new URLSearchParams(Object.entries(q).filter(([, v]) => v) as [string, string][]);
     return apiGet<SaleSummary[]>(`/pos/sales?${params}`);
   },
-  print: (saleId: string) => apiPost<{ duplicate: boolean; duplicateNumber: number; sale: SaleDetail }>(`/pos/sales/${saleId}/print`),
+  print: (saleId: string) => apiPost<{ duplicate: boolean; duplicateNumber: number; queued: boolean; sale: SaleDetail }>(`/pos/sales/${saleId}/print`),
+  printBill: (saleId: string, registerId: string | null, sessionId: string | null) => apiPost<{ queued: boolean }>(`/pos/sales/${saleId}/print-bill`, { registerId, sessionId }),
+  reprintPrepTicket: (prepTicketId: string) => apiPost<{ queued: boolean; document: import('../data/receipts').PrintDocument }>(`/pos/prep-tickets/${prepTicketId}/reprint`),
+  printStatus: () => apiGet<{ configured: boolean; failed: number; stuck: number; offline: string[] }>('/pos/print-status'),
+  openDrawer: (registerId: string, reason: string) => apiPost(`/pos/registers/${registerId}/open-drawer`, { reason }),
+  fireOrder: (orderId: string) => apiPost(`/pos/orders/${orderId}/fire`),
+  setOrderPriority: (orderId: string, urgent: boolean) => apiPost(`/pos/orders/${orderId}/priority`, { urgent }),
   correctSale: (
     saleId: string,
     body: { lineIds: string[]; reason: string; stockTreatment: string; refund: { sessionId: string; method: PaymentMethod; amountMil: number } | null },
@@ -223,6 +229,7 @@ export interface OrderLine {
   prepStatus: PrepStatus;
   responsibleWaiter: string | null;
   status: 'active' | 'cancelled' | 'refused';
+  fireStatus: 'now' | 'hold' | 'fired';
 }
 
 export interface Order {
@@ -240,6 +247,8 @@ export interface Order {
   createdBy: string;
   createdAt: string;
   validatedBy: string | null;
+  pickupNumber: number | null;
+  urgent: boolean;
   lines: OrderLine[];
 }
 
@@ -276,6 +285,9 @@ export interface SaleDetail {
   createdAt: string;
   completedAt: string | null;
   reprintCount: number;
+  printCount: number;
+  pickupNumber: number | null;
+  offlineRef: string | null;
   orders: Order[];
   payments: Payment[];
 }
