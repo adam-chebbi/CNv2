@@ -40,6 +40,8 @@ import { posReportsRouter } from './routes/posReports.js';
 import { equipmentRouter } from './routes/equipment.js';
 import { setupStatusRouter } from './routes/setupStatus.js';
 import { recetteRouter } from './routes/recette.js';
+import { printingRouter } from './routes/printing.js';
+import { agentRouter } from './routes/agent.js';
 import { purgeOldIdempotencyKeys } from './lib/idempotency.js';
 import { ensureCsrfCookie, csrfProtection } from './middleware/csrf.js';
 
@@ -80,6 +82,8 @@ export const createApp = (): express.Express => {
   // Runs on every request (app shell + API) so the CSRF cookie is already set before the first
   // state-changing request — see server/middleware/csrf.ts.
   app.use(ensureCsrfCookie);
+  // Print agents authenticate with their own token (no cookie): outside the CSRF guard.
+  app.use('/api/agent', agentRouter);
   app.use('/api', csrfProtection);
 
   app.use('/api/auth', authRouter);
@@ -126,6 +130,7 @@ export const createApp = (): express.Express => {
   app.use('/api/pos', equipmentRouter);
   app.use('/api/pos', setupStatusRouter);
   app.use('/api/pos', recetteRouter);
+  app.use('/api/pos', printingRouter);
 
   app.use(errorMiddleware);
 

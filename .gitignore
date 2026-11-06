@@ -23,3 +23,6 @@ docs-site/public/screenshots/screenshots.zip
 
 # Local database backups (npm run backup)
 server/data/backups/
+
+# Print agent configuration (contains its token)
+agent/agent-config.json
