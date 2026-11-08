@@ -16,6 +16,7 @@
     "test": "tsx --test \"server/tests/**/*.test.ts\"",
     "check": "npm run lint && npm run server:typecheck && npm test",
     "seed:pos-demo": "tsx server/scripts/seed-pos-demo.ts",
+    "seed:floor-demo": "tsx server/scripts/seed-floor-demo.ts",
     "backup": "tsx server/scripts/backup.ts",
     "backup:verify": "tsx server/scripts/verify-backup.ts"
   },
@@ -39,6 +40,7 @@
     "react": "^19.0.1",
     "react-dom": "^19.0.1",
     "tesseract.js": "^7.0.0",
+    "three": "^0.169.0",
     "ua-parser-js": "^2.0.10",
     "vite": "^6.2.3",
     "xlsx": "^0.18.5",
@@ -52,6 +54,7 @@
     "@types/nodemailer": "^6.4.24",
     "@types/papaparse": "^5.3.16",
     "@types/qrcode": "^1.5.5",
+    "@types/three": "^0.169.0",
     "autoprefixer": "^10.4.21",
     "concurrently": "^10.0.5",
     "esbuild": "^0.25.0",

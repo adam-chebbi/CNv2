@@ -2,6 +2,7 @@ import { apiDelete, apiGet, apiPatch, apiPost, apiPostOnce, apiPut } from '../ap
 import type { AppliedDiscount, CartLineInput, PricedArticle, PricedCart, PricedExtra, PricedVariant } from '../data/pricing';
 import type { PaymentMethod, SessionSummary } from '../data/cashSession';
 import type { PosSettings } from '../data/posSettings';
+import type { AreaGeometry, FloorElement } from '../data/floorScene';
 import type { LoyaltySettings, Reward } from '../data/loyalty';
 
 // Typed client for the point-of-sale API (/api/pos/*). Every create action that must never be
@@ -105,6 +106,13 @@ export const posApi = {
   archiveArea: (id: string) => apiPost(`/pos/floor/areas/${id}/archive`),
   createTable: (t: TableInput) => apiPost<FloorTable>('/pos/floor/tables', t),
   updateTable: (id: string, t: TableInput) => apiPut<FloorTable>(`/pos/floor/tables/${id}`, t),
+  saveDesign: (areaId: string, design: FloorDesignInput) => apiPut<{ area: FloorArea; elements: FloorElement[] }>(`/pos/floor/areas/${areaId}/design`, design),
+  floorAssets: () => apiGet<FloorAsset[]>('/pos/floor/assets'),
+  addFloorAsset: (a: { kind: FloorAsset['kind']; name: string; url?: string; dataUrl?: string; tileCm?: number }) => apiPost<FloorAsset>('/pos/floor/assets', a),
+  archiveFloorAsset: (id: string) => apiPost(`/pos/floor/assets/${id}/archive`),
+  floorVersions: () => apiGet<{ id: string; name: string; createdBy: string; createdAt: string; appliedAt: string | null }[]>('/pos/floor/versions'),
+  saveFloorVersion: (name: string) => apiPost<{ id: string; name: string }>('/pos/floor/versions', { name }),
+  applyFloorVersion: (id: string) => apiPost(`/pos/floor/versions/${id}/apply`),
   saveLayout: (tables: { id: string; x: number; y: number; width: number; height: number; rotation: number }[]) => apiPut('/pos/floor/layout', { tables }),
   archiveTable: (id: string) => apiPost(`/pos/floor/tables/${id}/archive`),
   regenerateQr: (id: string) => apiPost<FloorTable>(`/pos/floor/tables/${id}/regenerate-qr`),
@@ -333,11 +341,40 @@ export interface FloorTable {
   width: number;
   height: number;
   rotation: number;
+  chairs?: number | null;
+  material?: string | null;
   qrToken?: string;
   qrCheckedAt: string | null;
 }
 
 export type TableInput = Omit<FloorTable, 'id' | 'qrToken' | 'qrCheckedAt'>;
+
+export interface FloorArea {
+  id: string;
+  name: string;
+  sort: number;
+  geometry: AreaGeometry;
+}
+
+export interface FloorAsset {
+  id: string;
+  kind: 'texture' | 'model' | 'background';
+  name: string;
+  url: string;
+  source: 'cdn' | 'upload';
+  mimeType: string | null;
+  sizeBytes: number | null;
+  tileCm: number | null;
+  createdBy: string;
+  createdAt: string;
+}
+
+export interface FloorDesignInput {
+  geometry: AreaGeometry;
+  elements: Omit<FloorElement, 'areaId'>[];
+  tables: { id: string; x: number; y: number; width: number; height: number; rotation: number; shape: FloorTable['shape']; chairs: number | null; material: string | null }[];
+  allowOverlap?: boolean;
+}
 
 export interface LiveTable extends FloorTable {
   sectionId: string | null;
@@ -353,7 +390,8 @@ export interface LiveTable extends FloorTable {
 }
 
 export interface FloorState {
-  areas: { id: string; name: string; sort: number }[];
+  areas: FloorArea[];
+  elements: FloorElement[];
   sections: { id: string; name: string; color: string; waiterId: string | null; waiterName: string | null; tableIds: string[] }[];
   tables: LiveTable[];
 }

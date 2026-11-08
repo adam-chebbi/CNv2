@@ -668,6 +668,7 @@ export const applyPosSchema = (db: Db): void => {
   db.exec(CUSTOMERS);
   db.exec(TEAM_AND_EQUIPMENT);
   applyServiceUpgrades(db);
+  applyFloorDesign(db);
   // A register exists out of the box; more can be added from the settings.
   const hasRegister = db.prepare('SELECT 1 FROM cash_registers LIMIT 1').get();
   if (!hasRegister) {
@@ -765,4 +766,71 @@ const applyServiceUpgrades = (db: Db): void => {
       `);
     })();
   }
+};
+
+// --- Floor designer (amélioration 01): architecture, decor, 3D assets and plan versions ----------
+const FLOOR_DESIGN = `
+CREATE TABLE IF NOT EXISTS floor_elements (
+  id TEXT PRIMARY KEY,
+  area_id TEXT NOT NULL REFERENCES floor_areas(id),
+  kind TEXT NOT NULL CHECK (kind IN ('wall', 'door', 'window', 'counter', 'bar', 'column', 'bench', 'plant', 'stairs', 'zone', 'decor', 'model')),
+  label TEXT,
+  x INTEGER NOT NULL,
+  y INTEGER NOT NULL,
+  width INTEGER NOT NULL CHECK (width > 0),
+  height INTEGER NOT NULL CHECK (height > 0),
+  rotation INTEGER NOT NULL DEFAULT 0,
+  elevation_cm INTEGER NOT NULL DEFAULT 0,
+  color TEXT,
+  material TEXT,
+  asset_id TEXT,
+  archived_at TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_floor_elements_area ON floor_elements(area_id) WHERE archived_at IS NULL;
+
+-- Library of textures, 3D models (glTF/GLB) and background plans: a CDN link or an uploaded file
+-- (kept in the database so the nightly backup carries it).
+CREATE TABLE IF NOT EXISTS floor_assets (
+  id TEXT PRIMARY KEY,
+  kind TEXT NOT NULL CHECK (kind IN ('texture', 'model', 'background')),
+  name TEXT NOT NULL,
+  url TEXT,
+  mime_type TEXT,
+  size_bytes INTEGER,
+  data BLOB,
+  tile_cm INTEGER,
+  created_by TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  archived_at TEXT,
+  CHECK (url IS NOT NULL OR data IS NOT NULL)
+);
+
+-- Named versions of the plan ("été avec terrasse", "hiver"): a snapshot of geometry, decor and
+-- table positions that can be re-applied.
+CREATE TABLE IF NOT EXISTS floor_versions (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  snapshot TEXT NOT NULL,
+  created_by TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  applied_at TEXT
+);
+`;
+
+const applyFloorDesign = (db: Db): void => {
+  db.exec(FLOOR_DESIGN);
+  addColumn(db, 'floor_areas', 'width_cm', 'width_cm INTEGER');
+  addColumn(db, 'floor_areas', 'depth_cm', 'depth_cm INTEGER');
+  addColumn(db, 'floor_areas', 'floor_material', "floor_material TEXT NOT NULL DEFAULT 'parquet'");
+  addColumn(db, 'floor_areas', 'wall_color', "wall_color TEXT NOT NULL DEFAULT '#e9e1d6'");
+  addColumn(db, 'floor_areas', 'wall_height_cm', 'wall_height_cm INTEGER NOT NULL DEFAULT 280');
+  addColumn(db, 'floor_areas', 'background_asset_id', 'background_asset_id TEXT');
+  addColumn(db, 'floor_areas', 'background_opacity', 'background_opacity REAL NOT NULL DEFAULT 0.5');
+  addColumn(db, 'floor_areas', 'background_scale', 'background_scale REAL NOT NULL DEFAULT 1');
+  addColumn(db, 'floor_areas', 'background_x', 'background_x INTEGER NOT NULL DEFAULT 0');
+  addColumn(db, 'floor_areas', 'background_y', 'background_y INTEGER NOT NULL DEFAULT 0');
+  addColumn(db, 'dining_tables', 'chairs', 'chairs INTEGER');
+  addColumn(db, 'dining_tables', 'material', 'material TEXT');
 };

@@ -12,6 +12,7 @@ import { actorOf, createOrder, fireHeldLines, openSaleForVisit, pendingOrdersOfV
 import { serializeOrder } from '../lib/posService.js';
 import { cartLineSchema } from './posCatalog.js';
 import { visitCloseBlockers, floorExtensions, runVisitClosedHooks } from '../lib/floorState.js';
+import { listElements, serializeArea, type AreaRow } from '../lib/floorDesign.js';
 
 // Plan de salle, tables, carrés et visites (cahier des charges §6).
 
@@ -29,6 +30,8 @@ interface TableRow {
   width: number;
   height: number;
   rotation: number;
+  chairs: number | null;
+  material: string | null;
   qr_token: string;
   qr_checked_at: string | null;
   archived_at: string | null;
@@ -77,6 +80,8 @@ const serializeTable = (t: TableRow, withQr: boolean) => ({
   width: t.width,
   height: t.height,
   rotation: t.rotation,
+  chairs: t.chairs,
+  material: t.material,
   qrToken: withQr ? t.qr_token : undefined,
   qrCheckedAt: t.qr_checked_at,
 });
@@ -101,7 +106,7 @@ floorRouter.get('/floor', requireAnyPermission('floor:view', 'floor:manage', 'po
   const user = req.user!;
   const seeAll = canSeeAllTables(user);
   const mine = assignedTableIds(user.id);
-  const areas = db.prepare('SELECT id, name, sort FROM floor_areas WHERE archived_at IS NULL ORDER BY sort, created_at').all();
+  const areas = (db.prepare('SELECT * FROM floor_areas WHERE archived_at IS NULL ORDER BY sort, created_at').all() as AreaRow[]).map(serializeArea);
   const tables = db.prepare('SELECT * FROM dining_tables WHERE archived_at IS NULL ORDER BY name').all() as TableRow[];
   const sections = db
     .prepare(
@@ -116,6 +121,7 @@ floorRouter.get('/floor', requireAnyPermission('floor:view', 'floor:manage', 'po
 
   res.json({
     areas,
+    elements: listElements(),
     sections: sections.map((s) => ({
       id: s.id,
       name: s.name,
@@ -186,6 +192,8 @@ const tableSchema = z.object({
   width: z.number().int().min(30).max(600),
   height: z.number().int().min(30).max(600),
   rotation: z.number().int().min(0).max(359).default(0),
+  chairs: z.number().int().min(0).max(16).nullable().optional(),
+  material: z.string().max(80).nullable().optional(),
 });
 
 const assertUniqueTableName = (name: string, exceptId?: string): void => {
@@ -199,9 +207,9 @@ floorRouter.post('/floor/tables', requirePermission('floor:manage'), asyncHandle
   assertUniqueTableName(body.name);
   const id = randomUUID();
   db.prepare(
-    `INSERT INTO dining_tables (id, area_id, name, shape, capacity, x, y, width, height, rotation, qr_token, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-  ).run(id, body.areaId, body.name, body.shape, body.capacity, body.x, body.y, body.width, body.height, body.rotation, newQrToken(), new Date().toISOString());
+    `INSERT INTO dining_tables (id, area_id, name, shape, capacity, x, y, width, height, rotation, chairs, material, qr_token, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(id, body.areaId, body.name, body.shape, body.capacity, body.x, body.y, body.width, body.height, body.rotation, body.chairs ?? null, body.material ?? null, newQrToken(), new Date().toISOString());
   recordActivity('Salle', 'Table ajoutée', body.name, req.user!.fullName, { userId: req.user!.id, entityType: 'table', entityId: id, after: body });
   emitPosEvent({ type: 'floor.changed' });
   res.status(201).json(serializeTable(getTable(id), true));
@@ -211,7 +219,7 @@ floorRouter.put('/floor/tables/:id', requirePermission('floor:manage'), asyncHan
   const body = tableSchema.parse(req.body);
   const before = getTable(req.params.id);
   assertUniqueTableName(body.name, before.id);
-  db.prepare('UPDATE dining_tables SET area_id=?, name=?, shape=?, capacity=?, x=?, y=?, width=?, height=?, rotation=? WHERE id=?').run(
+  db.prepare('UPDATE dining_tables SET area_id=?, name=?, shape=?, capacity=?, x=?, y=?, width=?, height=?, rotation=?, chairs=?, material=? WHERE id=?').run(
     body.areaId,
     body.name,
     body.shape,
@@ -221,6 +229,8 @@ floorRouter.put('/floor/tables/:id', requirePermission('floor:manage'), asyncHan
     body.width,
     body.height,
     body.rotation,
+    body.chairs === undefined ? before.chairs : body.chairs,
+    body.material === undefined ? before.material : body.material,
     before.id
   );
   emitPosEvent({ type: 'floor.changed' });

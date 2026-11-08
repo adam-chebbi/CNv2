@@ -1,14 +1,27 @@
-import React, { useEffect, useState } from 'react';
+import React, { lazy, Suspense, useCallback, useEffect, useState } from 'react';
 import { Bell, CalendarClock, LayoutGrid, Receipt, ShoppingBag } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 import { usePosEvents } from '../hooks/usePosEvents';
 import { posApi, type LiveTable } from './api';
 import { useCashSession } from './CashSessionControls';
+import { FloorCanvas2D, type TableLook } from './floor/FloorCanvas2D';
 import { TableTerminal } from './TableTerminal';
 import { VisitPanel } from './VisitPanel';
 import { Btn, Card, cx, elapsed, Empty, ErrorNote, Field, inputCls, Loading, Modal, Money, PageHeader, time, useAction, useLoader, useNow } from './ui';
 
-// Plan de salle en service (cahier des charges §6.2): each table shows its state at a glance.
+// Plan de salle en service (cahier des charges §6.2): each table shows its state at a glance, in 2D
+// (to scale, drawn by the floor designer) or 3D (loaded on demand).
+
+const FloorScene3D = lazy(() => import('./floor/FloorScene3D'));
+
+const VIEW_KEY = 'cn_floor_view';
+const readView = (): '2d' | '3d' => {
+  try {
+    return localStorage.getItem(VIEW_KEY) === '3d' ? '3d' : '2d';
+  } catch {
+    return '2d';
+  }
+};
 
 type TableState = 'free' | 'busy' | 'reserved' | 'pending' | 'call' | 'bill' | 'locked';
 
@@ -20,6 +33,16 @@ export const tableState = (t: LiveTable): TableState => {
   if (t.visit) return 'busy';
   if (t.upcomingReservation) return 'reserved';
   return 'free';
+};
+
+const COLORS: Record<TableState, { fill: string; stroke: string; halo: string | null }> = {
+  free: { fill: '#ecfdf5', stroke: '#34d399', halo: null },
+  busy: { fill: '#e0f2fe', stroke: '#0ea5e9', halo: '#0ea5e9' },
+  reserved: { fill: '#ede9fe', stroke: '#8b5cf6', halo: '#8b5cf6' },
+  pending: { fill: '#ffedd5', stroke: '#f97316', halo: '#f97316' },
+  call: { fill: '#fee2e2', stroke: '#ef4444', halo: '#ef4444' },
+  bill: { fill: '#fef9c3', stroke: '#eab308', halo: '#eab308' },
+  locked: { fill: '#f3f4f6', stroke: '#d1d5db', halo: null },
 };
 
 const STYLE: Record<TableState, { cls: string; label: string }> = {
@@ -74,6 +97,31 @@ export const FloorPage: React.FC = () => {
   const openVisitView = (id: string) => (hasPermission('orders:take') ? setTerminalId(id) : setVisitId(id));
   const { busy, error, run } = useAction();
   const now = useNow();
+  const assets = useLoader(() => posApi.floorAssets().catch(() => []), []);
+  const [view, setViewState] = useState<'2d' | '3d'>(readView);
+  const setView = (v: '2d' | '3d') => {
+    setViewState(v);
+    try {
+      localStorage.setItem(VIEW_KEY, v);
+    } catch {
+      // per-device preference only
+    }
+  };
+  const look = useCallback(
+    (t: { id: string }): TableLook => {
+      const live = floor.data?.tables.find((x) => x.id === t.id);
+      if (!live) return { fill: '#fff', stroke: '#999' };
+      const state = tableState(live);
+      const c = COLORS[state];
+      const lines: string[] = [];
+      if (live.visit && live.accessible) {
+        lines.push(`${elapsed(live.visit.openedAt, now)}${live.visit.covers ? ` · ${live.visit.covers} p.` : ''}`);
+        if (live.billTotalMil > 0) lines.push(`${((live.billTotalMil - live.billPaidMil) / 1000).toFixed(3)} DT`);
+      } else if (!live.visit && live.upcomingReservation) lines.push(`Résa ${live.upcomingReservation.time}`);
+      return { fill: c.fill, stroke: c.stroke, halo: c.halo, pulse: state === 'call', lines, dim: state === 'locked' };
+    },
+    [floor.data, now]
+  );
 
   usePosEvents(['floor.changed', 'orders.changed', 'actions.changed', 'prep.changed', 'reservations.changed'], () => {
     void floor.reload();
@@ -86,13 +134,17 @@ export const FloorPage: React.FC = () => {
   if (floor.loading) return <Loading />;
   const data = floor.data;
   const tables = data?.tables.filter((t) => t.areaId === areaId) ?? [];
-  const width = Math.max(600, ...tables.map((t) => t.x + t.width + 20));
-  const height = Math.max(360, ...tables.map((t) => t.y + t.height + 20));
+  const elements = data?.elements.filter((e) => e.areaId === areaId) ?? [];
+  const area = data?.areas.find((a) => a.id === areaId) ?? null;
 
   const onTable = (t: LiveTable) => {
     if (!t.accessible) return;
     if (t.visit) openVisitView(t.visit.id);
     else if (hasPermission('visits:manage')) setOpenTable(t);
+  };
+  const onTableId = (id: string) => {
+    const t = data?.tables.find((x) => x.id === id);
+    if (t) onTable(t);
   };
 
   return (
@@ -113,33 +165,24 @@ export const FloorPage: React.FC = () => {
                 </button>
               ))}
             </div>
-            <div className="overflow-auto rounded-xl bg-[repeating-linear-gradient(0deg,#f9fafb,#f9fafb_19px,#f3f4f6_20px)] border border-gray-100">
-              <div className="relative" style={{ width, height }}>
-                {tables.map((t) => {
-                  const state = tableState(t);
-                  return (
-                    <button
-                      key={t.id}
-                      onClick={() => onTable(t)}
-                      aria-label={`Table ${t.name} — ${STYLE[state].label}`}
-                      className={cx('absolute border-2 flex flex-col items-center justify-center text-center p-1 shadow-sm transition', STYLE[state].cls, t.shape === 'round' ? 'rounded-full' : 'rounded-xl')}
-                      style={{ left: t.x, top: t.y, width: t.width, height: t.height, transform: t.rotation ? `rotate(${t.rotation}deg)` : undefined }}
-                    >
-                      <span className="text-sm font-bold">{t.name}</span>
-                      {t.visit && t.accessible && <span className="text-[10px]">{elapsed(t.visit.openedAt, now)}{t.visit.covers ? ` · ${t.visit.covers} p.` : ''}</span>}
-                      {t.visit && t.billTotalMil > 0 && t.accessible && <span className="text-[10px] font-semibold"><Money mil={t.billTotalMil - t.billPaidMil} /></span>}
-                      {!t.visit && t.upcomingReservation && <span className="text-[10px]">{t.upcomingReservation.time}</span>}
-                      <span className="flex gap-0.5">
-                        {t.waiterCalled && <Bell size={11} />}
-                        {t.billRequested && <Receipt size={11} />}
-                        {t.pendingOrders > 0 && <ShoppingBag size={11} />}
-                        {t.upcomingReservation && <CalendarClock size={11} />}
-                      </span>
+            {area && (
+              <div className="relative">
+                {view === '3d' ? (
+                  <Suspense fallback={<Loading />}>
+                    <FloorScene3D className="h-[62vh] min-h-[360px]" geometry={area.geometry} tables={tables} elements={elements} assets={assets.data ?? []} look={look} onTable={onTableId} />
+                  </Suspense>
+                ) : (
+                  <FloorCanvas2D className="h-[62vh] min-h-[360px]" geometry={area.geometry} tables={tables} elements={elements} assets={assets.data ?? []} look={look} onTable={onTableId} />
+                )}
+                <div className="absolute left-2 top-2 flex rounded-lg bg-white/90 shadow border border-gray-200 overflow-hidden text-xs font-semibold">
+                  {(['2d', '3d'] as const).map((v) => (
+                    <button key={v} onClick={() => setView(v)} className={cx('px-3 py-2', view === v ? 'bg-emerald-600 text-white' : 'text-gray-700')}>
+                      {v.toUpperCase()}
                     </button>
-                  );
-                })}
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
             <div className="flex flex-wrap gap-3 text-[11px] text-gray-600">
               {(Object.keys(STYLE) as TableState[]).map((s) => (
                 <span key={s} className="flex items-center gap-1">
