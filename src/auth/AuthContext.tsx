@@ -38,6 +38,24 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
+const REMEMBERED_USER = 'cn_cache:auth_user';
+const rememberUser = (user: AuthUser | null): void => {
+  try {
+    if (user) localStorage.setItem(REMEMBERED_USER, JSON.stringify(user));
+    else localStorage.removeItem(REMEMBERED_USER);
+  } catch {
+    // storage blocked: no offline sign-in on this device
+  }
+};
+const rememberedUser = (): AuthUser | null => {
+  try {
+    const raw = localStorage.getItem(REMEMBERED_USER);
+    return raw ? (JSON.parse(raw) as AuthUser) : null;
+  } catch {
+    return null;
+  }
+};
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isReady, setIsReady] = useState(false);
@@ -48,18 +66,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // mid-forced-password-change (server/routes/auth.ts uses requireAuthAllowPendingPasswordChange
     // for this route) so AuthGate can find out mustChangePassword in the first place.
     apiGet<{ user: AuthUser }>('/auth/me')
-      .then((res) => setUser(res.user))
-      .catch(() => undefined)
+      .then((res) => {
+        setUser(res.user);
+        rememberUser(res.user);
+      })
+      .catch((err) => {
+        // Server unreachable (no answer at all): the register keeps working offline with the last
+        // signed-in user of this device (amélioration 05). A real refusal (401) never does this.
+        if (!(err instanceof ApiError)) setUser(rememberedUser());
+        else rememberUser(null);
+      })
       .finally(() => setIsReady(true));
   }, []);
 
   const login = useCallback(async (identifier: string, password: string) => {
     const res = await apiPost<{ user: AuthUser }>('/auth/login', { identifier, password });
     setUser(res.user);
+    rememberUser(res.user);
   }, []);
 
   const logout = useCallback(() => {
     apiPost('/auth/logout').catch(() => undefined);
+    rememberUser(null);
     setUser(null);
   }, []);
 

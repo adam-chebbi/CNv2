@@ -5,6 +5,7 @@ import { CASH_DENOMINATIONS, countedTotal, PAYMENT_METHOD_LABELS, type PaymentMe
 import { formatDt, parseDtInput } from '../data/money';
 import { newIdempotencyKey } from '../hooks/usePosEvents';
 import { posApi, type CashSessionDetail } from './api';
+import { isNetworkError, readCache, saveCache, useOfflineQueue } from './offline';
 import { getExpenses } from '../api/expenses';
 import type { Expense } from '../data/expensesModel';
 import { toMillimes } from '../data/money';
@@ -43,10 +44,18 @@ export const useCashSession = () => {
       setRegisters(list);
       const current = list.find((r) => r.id === registerId) ?? list[0];
       if (current && current.id !== registerId) setRegisterId(current.id);
-      setSession(current?.openSessionId ? await posApi.session(current.openSessionId) : null);
+      const open = current?.openSessionId ? await posApi.session(current.openSessionId) : null;
+      setSession(open);
+      saveCache('session', { registers: list, session: open });
       setError(null);
     } catch (err) {
-      setError((err as Error).message);
+      // Offline: keep selling on the last known open session (amélioration 05).
+      const cached = readCache<{ registers: typeof registers; session: CashSessionDetail | null }>('session');
+      if (cached && isNetworkError(err)) {
+        setRegisters(cached.registers);
+        setSession(cached.session);
+        setError(null);
+      } else setError((err as Error).message);
     } finally {
       setLoading(false);
     }
@@ -183,6 +192,7 @@ export const CloseSessionModal: React.FC<{ session: CashSessionDetail; onClose: 
   const [comment, setComment] = useState('');
   const [key] = useState(newIdempotencyKey);
   const { busy, error, run } = useAction();
+  const offline = useOfflineQueue();
   const s = session.summary;
   const fromCounts = countedTotal(counts);
   const counted = manual.trim() ? parseDtInput(manual) : fromCounts;
@@ -198,7 +208,7 @@ export const CloseSessionModal: React.FC<{ session: CashSessionDetail; onClose: 
           <Btn
             variant="primary"
             busy={busy}
-            disabled={counted === null || (difference !== 0 && !comment.trim())}
+            disabled={counted === null || (difference !== 0 && !comment.trim()) || offline.pending.length > 0 || !offline.online}
             onClick={() => run(async () => onDone(await posApi.closeSession(session.id, { countedCashMil: counted!, counts: manual.trim() ? undefined : counts, comment: comment.trim() || undefined }, key)))}
           >
             Clôturer
@@ -207,6 +217,11 @@ export const CloseSessionModal: React.FC<{ session: CashSessionDetail; onClose: 
       }
     >
       <ErrorNote message={error} />
+      {(offline.pending.length > 0 || !offline.online) && (
+        <p className="p-2 rounded-lg bg-amber-50 text-amber-900 text-sm">
+          {offline.online ? `${offline.pending.length} vente(s) hors ligne pas encore envoyée(s) : la clôture attend leur envoi pour que le montant attendu soit complet.` : 'Pas de connexion : la clôture se fait une fois la connexion rétablie.'}
+        </p>
+      )}
       <div className="grid md:grid-cols-2 gap-4">
         <div className="space-y-1 text-sm">
           <p className="font-semibold text-gray-700">Récapitulatif</p>

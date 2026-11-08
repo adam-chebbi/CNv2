@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Bell, CalendarClock, ClipboardList, MessageSquare, Receipt, ShoppingBag, Undo2, Users } from 'lucide-react';
+import { Bell, CalendarClock, ClipboardList, MessageSquare, Receipt, ShoppingBag, Undo2, Users, WifiOff } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 import { usePosEvents } from '../hooks/usePosEvents';
 import { posApi, type ActionItem } from './api';
@@ -19,6 +19,7 @@ const KIND: Record<ActionItem['kind'], { icon: React.ComponentType<{ size?: numb
   reservation: { icon: CalendarClock, tone: 'border-l-violet-500' },
   feedback: { icon: MessageSquare, tone: 'border-l-sky-500' },
   missing_covers: { icon: Users, tone: 'border-l-gray-400' },
+  offline_sale: { icon: WifiOff, tone: 'border-l-amber-600' },
 };
 
 export const ActionsPage: React.FC = () => {

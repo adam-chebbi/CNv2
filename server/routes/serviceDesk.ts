@@ -302,7 +302,7 @@ serviceDeskRouter.patch('/feedback/:id', requirePermission('feedback:manage'), a
 
 export interface ActionItem {
   id: string;
-  kind: 'qr_order' | 'call_waiter' | 'bill' | 'cancellation' | 'reservation' | 'feedback' | 'missing_covers';
+  kind: 'qr_order' | 'call_waiter' | 'bill' | 'cancellation' | 'reservation' | 'feedback' | 'missing_covers' | 'offline_sale';
   title: string;
   detail?: string;
   tableId?: string | null;

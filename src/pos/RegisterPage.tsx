@@ -9,6 +9,8 @@ import { addLine, CartLines, ProductGrid, toPricingCatalog } from './CartCompose
 import { OpenSessionForm, SessionBar, useCashSession } from './CashSessionControls';
 import { PaymentPanel } from './PaymentPanel';
 import { PrintStatusBanner } from './PrintersPage';
+import { isNetworkError, withCache } from './offline';
+import { OfflineBanner, OfflineSaleModal } from './OfflineRegister';
 import { Btn, Card, cx, ErrorNote, Loading, Money, PageHeader, useAction, useLoader } from './ui';
 
 // Écran principal de caisse (cahier des charges §2.1 – §2.2): counter / takeaway sales. Table bills
@@ -18,8 +20,10 @@ import { Btn, Card, cx, ErrorNote, Loading, Money, PageHeader, useAction, useLoa
 export const RegisterPage: React.FC = () => {
   const { hasPermission } = useAuth();
   const cash = useCashSession();
-  const catalog = useLoader(() => posApi.catalog(), []);
-  const discounts = useLoader(() => posApi.discounts(), []);
+  // Cached on the device so the register keeps selling without Internet (amélioration 05).
+  const catalog = useLoader(() => withCache('catalog', () => posApi.catalog()), []);
+  const discounts = useLoader(() => withCache('discounts', () => posApi.discounts()), []);
+  const [offlineSale, setOfflineSale] = useState(false);
   const [lines, setLines] = useState<CartLineInput[]>([]);
   const [serviceType, setServiceType] = useState<'dine_in' | 'takeaway'>('takeaway');
   const [saleKey, setSaleKey] = useState(newIdempotencyKey);
@@ -68,10 +72,20 @@ export const RegisterPage: React.FC = () => {
   const validate = () =>
     run(async () => {
       if (!session) return;
-      const sale = await posApi.counterSale({ sessionId: session.id, serviceType, lines }, saleKey);
-      setLines([]);
-      setSaleKey(newIdempotencyKey());
-      setPaying(sale);
+      if (!navigator.onLine) {
+        setOfflineSale(true);
+        return;
+      }
+      try {
+        const sale = await posApi.counterSale({ sessionId: session.id, serviceType, lines }, saleKey);
+        setLines([]);
+        setSaleKey(newIdempotencyKey());
+        setPaying(sale);
+      } catch (err) {
+        // No answer from the server: the sale continues offline on this device.
+        if (isNetworkError(err)) setOfflineSale(true);
+        else throw err;
+      }
     });
 
   const toggleAvailability = (articleId: string, current: string) =>
@@ -92,6 +106,7 @@ export const RegisterPage: React.FC = () => {
       ) : (
         <>
           <SessionBar session={session} onChange={(s) => (s ? cash.setSession(s) : void cash.refresh())} />
+          <OfflineBanner />
           <PrintStatusBanner />
           <div className="grid lg:grid-cols-[1fr_380px] gap-4 items-start">
             <Card>
@@ -137,6 +152,21 @@ export const RegisterPage: React.FC = () => {
             </Card>
           </div>
         </>
+      )}
+      {offlineSale && session && preview && (
+        <OfflineSaleModal
+          cart={preview}
+          lines={lines}
+          serviceType={serviceType}
+          sessionId={session.id}
+          registerId={session.registerId}
+          onClose={() => setOfflineSale(false)}
+          onRecorded={() => {
+            setOfflineSale(false);
+            setLines([]);
+            setSaleKey(newIdempotencyKey());
+          }}
+        />
       )}
       {paying && (
         <PaymentPanel

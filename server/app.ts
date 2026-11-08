@@ -43,6 +43,7 @@ import { recetteRouter } from './routes/recette.js';
 import { printingRouter } from './routes/printing.js';
 import { agentRouter } from './routes/agent.js';
 import { displaysPublicRouter, displaysRouter } from './routes/displays.js';
+import { offlineRouter } from './routes/offline.js';
 import { purgeOldIdempotencyKeys } from './lib/idempotency.js';
 import { ensureCsrfCookie, csrfProtection } from './middleware/csrf.js';
 
@@ -134,6 +135,7 @@ export const createApp = (): express.Express => {
   app.use('/api/pos', recetteRouter);
   app.use('/api/pos', printingRouter);
   app.use('/api/pos', displaysRouter);
+  app.use('/api/pos', offlineRouter);
 
   app.use(errorMiddleware);
 
