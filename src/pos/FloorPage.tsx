@@ -4,6 +4,7 @@ import { useAuth } from '../auth/AuthContext';
 import { usePosEvents } from '../hooks/usePosEvents';
 import { posApi, type LiveTable } from './api';
 import { useCashSession } from './CashSessionControls';
+import { TableTerminal } from './TableTerminal';
 import { VisitPanel } from './VisitPanel';
 import { Btn, Card, cx, elapsed, Empty, ErrorNote, Field, inputCls, Loading, Modal, Money, PageHeader, time, useAction, useLoader, useNow } from './ui';
 
@@ -68,6 +69,9 @@ export const FloorPage: React.FC = () => {
   const [areaId, setAreaId] = useState<string>('');
   const [openTable, setOpenTable] = useState<LiveTable | null>(null);
   const [visitId, setVisitId] = useState<string | null>(null);
+  // Staff who take orders land on the table terminal; others get the detail panel.
+  const [terminalId, setTerminalId] = useState<string | null>(null);
+  const openVisitView = (id: string) => (hasPermission('orders:take') ? setTerminalId(id) : setVisitId(id));
   const { busy, error, run } = useAction();
   const now = useNow();
 
@@ -87,7 +91,7 @@ export const FloorPage: React.FC = () => {
 
   const onTable = (t: LiveTable) => {
     if (!t.accessible) return;
-    if (t.visit) setVisitId(t.visit.id);
+    if (t.visit) openVisitView(t.visit.id);
     else if (hasPermission('visits:manage')) setOpenTable(t);
   };
 
@@ -173,7 +177,20 @@ export const FloorPage: React.FC = () => {
           onClose={() => setOpenTable(null)}
           onOpened={(id) => {
             setOpenTable(null);
-            setVisitId(id);
+            openVisitView(id);
+            void floor.reload();
+          }}
+        />
+      )}
+      {terminalId && (
+        <TableTerminal
+          visitId={terminalId}
+          floor={data}
+          sessionId={cash.session?.id ?? null}
+          registerId={cash.session?.registerId ?? null}
+          onSwitch={setTerminalId}
+          onClose={() => {
+            setTerminalId(null);
             void floor.reload();
           }}
         />

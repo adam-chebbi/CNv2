@@ -6,6 +6,7 @@ import { newIdempotencyKey, usePosEvents } from '../hooks/usePosEvents';
 import { posApi, type Order, type OrderLine, type VisitDetail } from './api';
 import { addLine, CartLines, lineKey, ProductGrid } from './CartComposer';
 import { PaymentPanel } from './PaymentPanel';
+import { TableTransferModal } from './TableTransfer';
 import { ORDER_STATUS_LABELS, PREP_LABELS, PREP_TONES } from './labels';
 import { Badge, Btn, elapsed, ErrorNote, Field, inputCls, Loading, Modal, Money, time, useAction, useLoader, useNow } from './ui';
 
@@ -199,6 +200,7 @@ export const VisitPanel: React.FC<{ visitId: string; sessionId: string | null; o
   const [cancelTarget, setCancelTarget] = useState<{ type: 'line' | 'order' | 'visit'; id: string; label: string } | null>(null);
   const [orderKey, setOrderKey] = useState(newIdempotencyKey);
   const [covers, setCovers] = useState('');
+  const [transferring, setTransferring] = useState(false);
   const { busy, error, setError, run } = useAction();
   const now = useNow();
   usePosEvents(['orders.changed', 'prep.changed', 'floor.changed', 'actions.changed'], () => void visit.reload(), 15_000);
@@ -323,6 +325,11 @@ export const VisitPanel: React.FC<{ visitId: string; sessionId: string | null; o
               Annuler la visite
             </Btn>
           )}
+          {hasPermission('tables:transfer') && (
+            <Btn variant="ghost" onClick={() => setTransferring(true)}>
+              Déplacer / fusionner
+            </Btn>
+          )}
           {hasPermission('visits:manage') && (
             <Btn variant="warning" busy={busy} onClick={() => run(async () => { await posApi.closeVisit(v.id); onClose(); })}>
               Libérer la table
@@ -340,6 +347,16 @@ export const VisitPanel: React.FC<{ visitId: string; sessionId: string | null; o
             visit.setData(await posApi.staffOrder(v.id, lines, orderKey, urgent));
             setOrderKey(newIdempotencyKey());
             setComposing(false);
+          }}
+        />
+      )}
+      {transferring && (
+        <TableTransferModal
+          visit={v}
+          onClose={() => setTransferring(false)}
+          onDone={() => {
+            setTransferring(false);
+            onClose();
           }}
         />
       )}

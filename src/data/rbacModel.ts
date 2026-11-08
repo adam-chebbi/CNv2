@@ -150,6 +150,8 @@ export const PERMISSIONS: PermissionDef[] = [
   { key: 'floor:manage', module: 'floor', moduleLabel: 'Salle & tables', label: 'Éditer le plan', description: 'Créer des espaces, ajouter, déplacer ou retirer des tables, imprimer les QR codes.' },
   { key: 'tables:all', module: 'floor', moduleLabel: 'Salle & tables', label: 'Toutes les tables', description: 'Agir sur toutes les tables (sans cette permission : uniquement les tables de ses carrés).' },
   { key: 'tables:assign', module: 'floor', moduleLabel: 'Salle & tables', label: 'Carrés & affectations', description: 'Définir les carrés et y affecter les serveurs, y compris pendant le service.' },
+  { key: 'tables:transfer', module: 'floor', moduleLabel: 'Salle & tables', label: 'Transférer / fusionner des tables', description: 'Déplacer une table occupée vers une autre table libre, ou fusionner deux tables en une seule addition.' },
+  { key: 'floor:assets', module: 'floor', moduleLabel: 'Salle & tables', label: 'Bibliothèque 3D', description: 'Ajouter des textures, modèles 3D et images de fond à la bibliothèque du plan de salle.' },
   { key: 'visits:manage', module: 'floor', moduleLabel: 'Salle & tables', label: 'Ouvrir / libérer une table', description: 'Ouvrir une visite (code client), saisir les couverts, libérer la table.' },
 
   // --- Commandes & préparation ------------------------------------------------------------------
@@ -302,6 +304,14 @@ export const PROFILE_DESCRIPTIONS: Record<string, string> = {
 // Grants added after the first release of the profiles. Each wave is applied once to the roles that
 // already exist (flag in pos_settings), so a later revocation by the direction is never undone.
 export const PROFILE_GRANT_WAVES: { flag: string; grants: Record<string, string[]> }[] = [
+  {
+    flag: 'rbac_wave_floor_cms_transfer',
+    grants: {
+      [DIRECTION_ROLE_NAME]: ['tables:transfer', 'floor:assets'],
+      [GERANT_ROLE_NAME]: ['tables:transfer'],
+      [CAISSE_ROLE_NAME]: ['tables:transfer'],
+    },
+  },
   {
     flag: 'rbac_wave_team_equipment',
     grants: {

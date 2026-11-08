@@ -8,7 +8,7 @@ import { recordActivity } from '../lib/activity.js';
 import { emitPosEvent } from '../lib/events.js';
 import { runIdempotent } from '../lib/idempotency.js';
 import { assertTableAccess, assignedTableIds, canSeeAllTables, currentWaiterOfTable } from '../lib/posAccess.js';
-import { actorOf, createOrder, fireHeldLines, openSaleForVisit, pendingOrdersOfVisit, priceCart, saleDetail, validateOrder, type OrderRow } from '../lib/posService.js';
+import { actorOf, createOrder, fireHeldLines, openSaleForVisit, pendingOrdersOfVisit, priceCart, recomputeSale, saleDetail, validateOrder, type OrderRow } from '../lib/posService.js';
 import { serializeOrder } from '../lib/posService.js';
 import { cartLineSchema } from './posCatalog.js';
 import { visitCloseBlockers, floorExtensions, runVisitClosedHooks } from '../lib/floorState.js';
@@ -552,4 +552,62 @@ floorRouter.post('/orders/:id/priority', requirePermission('orders:take'), async
   db.prepare('UPDATE pos_orders SET priority = ? WHERE id = ?').run(urgent ? 1 : 0, order.id);
   emitPosEvent({ type: 'prep.changed' });
   res.json({ ok: true });
+}));
+
+// --- Transfer and merge (amélioration 02) ---------------------------------------------------------
+
+// The whole party moves to a free table: same visit, same bill, same history; journalled.
+floorRouter.post('/visits/:id/transfer', requirePermission('tables:transfer'), asyncHandler((req, res) => {
+  const { toTableId } = z.object({ toTableId: z.string().min(1) }).parse(req.body);
+  const user = req.user!;
+  const visit = getVisit(req.params.id);
+  if (visit.status !== 'open') throw new ApiError(409, 'Cette visite est clôturée.');
+  assertTableAccess(user, visit.table_id);
+  assertTableAccess(user, toTableId);
+  const from = getTable(visit.table_id);
+  const to = getTable(toTableId);
+  if (to.archived_at) throw notFound('Table');
+  if (db.prepare("SELECT 1 FROM visits WHERE table_id = ? AND status = 'open'").get(to.id)) throw new ApiError(409, `La table ${to.name} est occupée : utilisez la fusion.`);
+  db.transaction(() => {
+    db.prepare('UPDATE visits SET table_id = ? WHERE id = ?').run(to.id, visit.id);
+    db.prepare("UPDATE pos_sales SET table_name = ? WHERE visit_id = ? AND status = 'open'").run(to.name, visit.id);
+    db.prepare("UPDATE service_requests SET table_id = ? WHERE visit_id = ? AND status != 'done'").run(to.id, visit.id);
+    recordActivity('Salle', 'Transfert de table', `${from.name} → ${to.name}`, user.fullName, { userId: user.id, entityType: 'visit', entityId: visit.id, before: { table: from.name }, after: { table: to.name } });
+  })();
+  emitPosEvent({ type: 'floor.changed' });
+  res.json(visitDetail(getVisit(visit.id)));
+}));
+
+// Two tables become one bill (a growing group). Refused once either bill has a payment.
+floorRouter.post('/visits/:id/merge', requirePermission('tables:transfer'), asyncHandler((req, res) => {
+  const { intoVisitId } = z.object({ intoVisitId: z.string().min(1) }).parse(req.body);
+  const user = req.user!;
+  const source = getVisit(req.params.id);
+  const target = getVisit(intoVisitId);
+  if (source.id === target.id) throw new ApiError(400, 'Choisissez une autre table.');
+  if (source.status !== 'open' || target.status !== 'open') throw new ApiError(409, 'Les deux tables doivent être ouvertes.');
+  assertTableAccess(user, source.table_id);
+  assertTableAccess(user, target.table_id);
+  const paid = db.prepare("SELECT 1 FROM pos_sales WHERE visit_id IN (?, ?) AND status = 'open' AND paid_mil > 0").get(source.id, target.id);
+  if (paid) throw new ApiError(409, 'Une des additions a déjà un règlement : encaissez-la séparément.');
+  const from = getTable(source.table_id);
+  const to = getTable(target.table_id);
+  db.transaction(() => {
+    const by = actorOf(user);
+    const targetSale = openSaleForVisit(target.id, by);
+    db.prepare("UPDATE pos_orders SET visit_id = ?, sale_id = CASE WHEN status = 'validated' THEN ? ELSE sale_id END WHERE visit_id = ?").run(target.id, targetSale.id, source.id);
+    db.prepare("UPDATE pos_sales SET status = 'cancelled' WHERE visit_id = ? AND status = 'open'").run(source.id);
+    // A call of the same type already pending on the target absorbs the source one (one active per type).
+    db.prepare("UPDATE service_requests SET status = 'done' WHERE visit_id = ? AND status != 'done' AND type IN (SELECT type FROM service_requests WHERE visit_id = ? AND status != 'done')").run(source.id, target.id);
+    db.prepare("UPDATE service_requests SET visit_id = ?, table_id = ? WHERE visit_id = ? AND status != 'done'").run(target.id, target.table_id, source.id);
+    db.prepare('UPDATE visits SET covers = NULLIF(COALESCE(covers, 0) + COALESCE(?, 0), 0) WHERE id = ?').run(source.covers, target.id);
+    const now = new Date().toISOString();
+    db.prepare("UPDATE visits SET status = 'closed', closed_at = ?, closed_by = ? WHERE id = ?").run(now, user.fullName, source.id);
+    db.prepare('UPDATE visit_devices SET revoked_at = ? WHERE visit_id = ? AND revoked_at IS NULL').run(now, source.id);
+    recomputeSale(targetSale.id);
+    recordActivity('Salle', 'Fusion de tables', `${from.name} fusionnée dans ${to.name}`, user.fullName, { userId: user.id, entityType: 'visit', entityId: target.id, before: { from: from.name }, after: { into: to.name } });
+  })();
+  emitPosEvent({ type: 'floor.changed' });
+  emitPosEvent({ type: 'prep.changed' });
+  res.json(visitDetail(getVisit(target.id)));
 }));

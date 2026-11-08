@@ -122,6 +122,8 @@ export const posApi = {
   setCovers: (visitId: string, covers: number) => apiPatch<VisitDetail>(`/pos/visits/${visitId}`, { covers }),
   regenerateCode: (visitId: string) => apiPost<VisitDetail>(`/pos/visits/${visitId}/regenerate-code`),
   closeVisit: (visitId: string) => apiPost<VisitDetail>(`/pos/visits/${visitId}/close`),
+  transferVisit: (visitId: string, toTableId: string) => apiPost<VisitDetail>(`/pos/visits/${visitId}/transfer`, { toTableId }),
+  mergeVisit: (visitId: string, intoVisitId: string) => apiPost<VisitDetail>(`/pos/visits/${visitId}/merge`, { intoVisitId }),
   staffOrder: (visitId: string, lines: (CartLineInput & { hold?: boolean })[], key: string, urgent = false) =>
     apiPostOnce<VisitDetail>(`/pos/visits/${visitId}/orders`, { lines, urgent }, key),
   acceptOrder: (orderId: string) => apiPost<Order>(`/pos/orders/${orderId}/accept`),
