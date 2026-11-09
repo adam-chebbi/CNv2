@@ -669,6 +669,7 @@ export const applyPosSchema = (db: Db): void => {
   applyServiceUpgrades(db);
   applyFloorDesign(db);
   applySplitBills(db);
+  db.exec(INSIGHTS);
   // A register exists out of the box; more can be added from the settings.
   const hasRegister = db.prepare('SELECT 1 FROM cash_registers LIMIT 1').get();
   if (!hasRegister) {
@@ -862,3 +863,14 @@ const applySplitBills = (db: Db): void => {
   db.exec(`DROP INDEX IF EXISTS idx_loyalty_one_earn_per_sale;
     CREATE UNIQUE INDEX IF NOT EXISTS idx_loyalty_one_earn_per_part ON loyalty_ledger(sale_id, COALESCE(split_id, '')) WHERE type = 'earn';`);
 };
+
+// --- Pilotage (amélioration 09): supplier pack size and lead time per stock product ---------------
+const INSIGHTS = `
+CREATE TABLE IF NOT EXISTS stock_reorder_settings (
+  product_id TEXT PRIMARY KEY,
+  pack_size REAL,
+  lead_days INTEGER,
+  updated_by TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+`;
