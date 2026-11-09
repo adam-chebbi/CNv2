@@ -2,7 +2,8 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Maximize2, Minus, Plus } from 'lucide-react';
 import { chairPositions, snap, type AreaGeometry, type FloorElement, type PlanTable } from '../../data/floorScene';
 import type { FloorAsset } from '../api';
-import { backgroundUrl, resolveMaterial, useImageSize } from './materials';
+import { backgroundUrl, imageAssetUrl, resolveMaterial, useImageSize } from './materials';
+import { accepts, readDrop, type DropData } from './drop';
 
 // Top view of one area, to scale (1 SVG unit = 1 cm). Shared by the service plan and the designer.
 // Service: tap a table. Edit: select and drag tables and decor (10 cm magnetic grid).
@@ -32,12 +33,18 @@ interface Props {
   showBackground?: boolean;
   grid?: number;
   className?: string;
+  // Designer: something dragged from the catalogue or the computer is dropped at a point of the
+  // plan, possibly onto a table or an element.
+  onDropItem?: (data: DropData, at: { x: number; y: number }, target: Selection) => void;
+  // Thumbnails of 3D models (by asset id), drawn inside their footprint.
+  modelThumbs?: Record<string, string>;
 }
 
 const DEFAULT_LOOK: TableLook = { fill: '#f5efe6', stroke: '#8b6b4a' };
 const MARGIN = 60;
 
-export const FloorCanvas2D: React.FC<Props> = ({ geometry, tables, elements, assets, look, onTable, editable, selection, onSelect, onMove, showBackground = editable, grid = 10, className }) => {
+export const FloorCanvas2D: React.FC<Props> = ({ geometry, tables, elements, assets, look, onTable, editable, selection, onSelect, onMove, showBackground = editable, grid = 10, className, onDropItem, modelThumbs }) => {
+  const [dropping, setDropping] = useState(false);
   const svgRef = useRef<SVGSVGElement>(null);
   const fit = useMemo(() => ({ x: -MARGIN, y: -MARGIN, w: geometry.widthCm + MARGIN * 2, h: geometry.depthCm + MARGIN * 2 }), [geometry.widthCm, geometry.depthCm]);
   const [view, setView] = useState(fit);
@@ -157,6 +164,22 @@ export const FloorCanvas2D: React.FC<Props> = ({ geometry, tables, elements, ass
           </>
         );
         break;
+      case 'model': {
+        const thumb = el.assetId ? modelThumbs?.[el.assetId] : undefined;
+        body = (
+          <>
+            <rect width={w} height={h} rx={8} fill={color} fillOpacity={0.18} stroke={color} strokeWidth={2} strokeDasharray="6 4" />
+            {thumb && <image href={thumb} width={w} height={h} preserveAspectRatio="xMidYMid meet" />}
+          </>
+        );
+        break;
+      }
+      case 'decor': {
+        // A picture from the library (rug, sign, logo…) is drawn stretched over the footprint.
+        const img = imageAssetUrl(el.assetId, assets);
+        body = img ? <image href={img} width={w} height={h} preserveAspectRatio="none" /> : <rect width={w} height={h} rx={6} fill={fill} stroke="#00000033" strokeWidth={2} />;
+        break;
+      }
       case 'stairs':
         body = (
           <>
@@ -171,7 +194,7 @@ export const FloorCanvas2D: React.FC<Props> = ({ geometry, tables, elements, ass
         body = <rect width={w} height={h} rx={el.kind === 'wall' ? 0 : 6} fill={fill} stroke={el.kind === 'wall' ? 'none' : '#00000033'} strokeWidth={2} />;
     }
     return (
-      <g key={el.id} transform={`translate(${el.x} ${el.y}) rotate(${el.rotation} ${w / 2} ${h / 2})`} {...common}>
+      <g key={el.id} data-sel={`element:${el.id}`} transform={`translate(${el.x} ${el.y}) rotate(${el.rotation} ${w / 2} ${h / 2})`} {...common}>
         {body}
         {el.label && el.kind !== 'wall' && Math.min(w, h) >= 40 && (
           <text x={w / 2} y={h / 2} textAnchor="middle" dominantBaseline="central" fontSize={Math.min(18, h / 2.5)} fill="#3b2f26" style={{ pointerEvents: 'none' }}>
@@ -192,6 +215,7 @@ export const FloorCanvas2D: React.FC<Props> = ({ geometry, tables, elements, ass
     return (
       <g
         key={t.id}
+        data-sel={`table:${t.id}`}
         transform={`translate(${cx} ${cy})`}
         opacity={l.dim ? 0.45 : 1}
         onPointerDown={(e) => startItem(e, { type: 'table', id: t.id }, { x: t.x, y: t.y })}
@@ -230,7 +254,33 @@ export const FloorCanvas2D: React.FC<Props> = ({ geometry, tables, elements, ass
   });
 
   return (
-    <div className={`relative ${className ?? ''}`}>
+    <div
+      className={`relative ${className ?? ''}`}
+      onDragOver={(e) => {
+        if (!onDropItem || !accepts(e)) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'copy';
+        setDropping(true);
+      }}
+      onDragLeave={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDropping(false);
+      }}
+      onDrop={(e) => {
+        setDropping(false);
+        if (!onDropItem) return;
+        e.preventDefault();
+        const data = readDrop(e);
+        if (!data) return;
+        const hit = (document.elementFromPoint(e.clientX, e.clientY) as Element | null)?.closest('[data-sel]')?.getAttribute('data-sel');
+        const target: Selection = hit ? { type: hit.split(':')[0] as 'table' | 'element', id: hit.slice(hit.indexOf(':') + 1) } : null;
+        onDropItem(data, toPlan(e), target);
+      }}
+    >
+      {dropping && (
+        <div className="absolute inset-0 z-10 rounded-xl border-2 border-dashed border-emerald-500 bg-emerald-500/10 pointer-events-none flex items-start justify-center pt-3">
+          <span className="rounded-full bg-emerald-600 text-white text-xs font-semibold px-3 py-1">Déposez pour placer ici</span>
+        </div>
+      )}
       <svg
         ref={svgRef}
         viewBox={`${view.x} ${view.y} ${view.w} ${view.h}`}

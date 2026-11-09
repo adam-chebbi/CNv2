@@ -1,11 +1,12 @@
-import React, { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, Box, Copy, History, Image as ImageIcon, Library, PenTool, RotateCw, Save, Trash2, Upload } from 'lucide-react';
+import React, { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { AlertTriangle, AppWindow, Armchair, Box, BrickWall, Columns3, Copy, DoorOpen, Footprints, Frame, History, Image as ImageIcon, Library, PenTool, Redo2, RotateCw, Save, SquareDashed, Sprout, Store, Trash2, Undo2, Upload, Wine } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 import { CDN_MODELS, clamp, DEFAULT_GEOMETRY, ELEMENT_DEFAULTS, ELEMENT_KINDS, fitArea, layoutWarnings, MATERIALS, type AreaGeometry, type ElementKind, type FloorElement, type PlanTable } from '../data/floorScene';
 import { usePosEvents } from '../hooks/usePosEvents';
 import { posApi, type FloorAsset, type FloorDesignInput } from './api';
 import { FloorCanvas2D, type Selection } from './floor/FloorCanvas2D';
-import { materialOptions, useImageSize } from './floor/materials';
+import { materialOptions, modelUrl, resolveMaterial, useImageSize } from './floor/materials';
+import { dragProps, isImageFile, isModelFile, type DropData } from './floor/drop';
 import { Badge, Btn, Card, cx, dateTime, Empty, ErrorNote, Field, inputCls, Loading, PageHeader, useAction, useLoader } from './ui';
 
 // Concepteur du plan de salle (amélioration 01): a CMS for the café architecture — dimensions,
@@ -46,6 +47,7 @@ export const FloorDesignerPage: React.FC = () => {
   const [view, setView] = useState<'2d' | '3d'>('2d');
   const [tab, setTab] = useState<'plan' | 'versions' | 'library'>(canEdit ? 'plan' : 'library');
   const { busy, error, setError, run } = useAction();
+  const lib = assets.data ?? [];
   usePosEvents(['floor.changed'], () => {
     if (!dirty) void floor.reload();
   });
@@ -65,10 +67,42 @@ export const FloorDesignerPage: React.FC = () => {
     setDraft({ geometry: { ...DEFAULT_GEOMETRY, ...area.geometry, ...size }, elements, tables });
   }, [floor.data, areaId, dirty]);
 
+  // Undo / redo (Ctrl+Z, Ctrl+Y). A drag is one step: changes closer than 400 ms are merged.
+  const past = useRef<Draft[]>([]);
+  const future = useRef<Draft[]>([]);
+  const lastPush = useRef(0);
+  const [, setHistoryTick] = useState(0);
   const update = useCallback((fn: (d: Draft) => Draft) => {
-    setDraft((d) => (d ? fn(d) : d));
+    setDraft((d) => {
+      if (!d) return d;
+      if (Date.now() - lastPush.current > 400) {
+        past.current = [...past.current.slice(-49), d];
+        future.current = [];
+        setHistoryTick((n) => n + 1);
+      }
+      lastPush.current = Date.now();
+      return fn(d);
+    });
     setDirty(true);
   }, []);
+  const undo = () => {
+    const prev = past.current.pop();
+    if (!prev || !draft) return;
+    future.current.push(draft);
+    lastPush.current = 0;
+    setDraft(prev);
+    setDirty(true);
+    setHistoryTick((n) => n + 1);
+  };
+  const redo = () => {
+    const next = future.current.pop();
+    if (!next || !draft) return;
+    past.current.push(draft);
+    lastPush.current = 0;
+    setDraft(next);
+    setDirty(true);
+    setHistoryTick((n) => n + 1);
+  };
 
   const selectedElement = selection?.type === 'element' ? draft?.elements.find((e) => e.id === selection.id) : undefined;
   const selectedTable = selection?.type === 'table' ? draft?.tables.find((t) => t.id === selection.id) : undefined;
@@ -76,27 +110,103 @@ export const FloorDesignerPage: React.FC = () => {
   const setTable = (id: string, patch: Partial<DraftTable>) => update((d) => ({ ...d, tables: d.tables.map((t) => (t.id === id ? { ...t, ...patch } : t)) }));
   const warnings = useMemo(() => (draft ? layoutWarnings(draft.tables) : []), [draft]);
 
-  const addElement = (kind: ElementKind) => {
-    if (!draft) return;
+  const addElement = (kind: ElementKind, at?: { x: number; y: number }, patch: Partial<FloorElement> = {}): FloorElement | null => {
+    if (!draft) return null;
     const def = ELEMENT_DEFAULTS[kind];
+    const width = patch.width ?? def.width;
+    const height = patch.height ?? def.height;
+    const center = at ?? { x: draft.geometry.widthCm / 2, y: draft.geometry.depthCm / 2 };
     const el: FloorElement = {
       id: crypto.randomUUID(),
       areaId,
       kind,
       label: kind === 'wall' ? null : def.label,
-      x: Math.round(draft.geometry.widthCm / 2 - def.width / 2),
-      y: Math.round(draft.geometry.depthCm / 2 - def.height / 2),
-      width: def.width,
-      height: def.height,
+      width,
+      height,
       rotation: 0,
       elevationCm: def.elevationCm,
       color: def.color,
       material: kind === 'counter' || kind === 'bar' ? 'walnut' : null,
       assetId: kind === 'model' ? `cdn:${CDN_MODELS[0].key}` : null,
+      ...patch,
+      x: Math.max(0, Math.round((center.x - width / 2) / 10) * 10),
+      y: Math.max(0, Math.round((center.y - height / 2) / 10) * 10),
     };
     update((d) => ({ ...d, elements: [...d.elements, el] }));
     setSelection({ type: 'element', id: el.id });
+    return el;
   };
+
+  // A 3D model arrives at the drop point, then takes its real size read from the file.
+  const placeModel = async (assetId: string, at: { x: number; y: number }, url?: string, fileName?: string) => {
+    const name = fileName ?? assetId.startsWith('cdn:') ? CDN_MODELS.find((m) => `cdn:${m.key}` === assetId)?.label : lib.find((a) => a.id === assetId)?.name;
+    const el = addElement('model', at, { assetId, label: name ?? 'Objet 3D' });
+    const src = url ?? modelUrl(assetId, lib);
+    if (!el || !src) return;
+    try {
+      const size = await (await import('./floor/modelTools')).modelSizeCm(src);
+      setElement(el.id, { width: size.width, height: size.depth, elevationCm: size.height, x: Math.max(0, Math.round(at.x - size.width / 2)), y: Math.max(0, Math.round(at.y - size.depth / 2)) });
+    } catch {
+      /* unreadable model: keeps the default footprint */
+    }
+  };
+
+  // A picture (rug, sign, logo) keeps its proportions, 2 m wide by default.
+  const placePicture = async (assetId: string, url: string, name: string, at: { x: number; y: number }) => {
+    const ratio = await new Promise<number>((resolve) => {
+      const img = new Image();
+      img.onload = () => resolve(img.naturalHeight / Math.max(1, img.naturalWidth));
+      img.onerror = () => resolve(1);
+      img.src = url;
+    });
+    addElement('decor', at, { assetId, label: name, width: 200, height: Math.max(20, Math.round(200 * ratio)), elevationCm: 1, material: null });
+  };
+
+  const applyMaterial = (key: string, target: Selection) => {
+    if (target?.type === 'element') setElement(target.id, { material: key });
+    else if (target?.type === 'table') setTable(target.id, { material: key });
+    else update((d) => ({ ...d, geometry: { ...d.geometry, floorMaterial: key } }));
+  };
+
+  const onDropItem = (data: DropData, at: { x: number; y: number }, target: Selection) =>
+    run(async () => {
+      if (data.kind === 'element') addElement(data.value, at);
+      else if (data.kind === 'model') await placeModel(data.assetId, at);
+      else if (data.kind === 'material') applyMaterial(data.key, target);
+      else {
+        for (const file of data.files) {
+          if (!canLibrary) throw new Error('Ajouter un fichier à la bibliothèque demande le droit « Bibliothèque 3D ».');
+          const name = file.name.replace(/\.[a-z0-9]+$/i, '').slice(0, 80) || 'Sans nom';
+          if (isModelFile(file)) {
+            const a = await posApi.addFloorAsset({ kind: 'model', name, dataUrl: await readFile(file) });
+            await assets.reload();
+            await placeModel(a.id, at, a.url, name);
+          } else if (isImageFile(file)) {
+            const a = await posApi.addFloorAsset({ kind: 'texture', name, dataUrl: await readFile(file), tileCm: 100 });
+            await assets.reload();
+            // On a table or an object: becomes its material. Elsewhere: a picture on the floor.
+            if (target) applyMaterial(`asset:${a.id}`, target);
+            else await placePicture(a.id, a.url, name, at);
+          }
+        }
+      }
+    });
+
+  // Thumbnails of the 3D models (catalogue, library, 2D plan), rendered once in the browser.
+  const [thumbs, setThumbs] = useState<Record<string, string>>({});
+  const modelIds = useMemo(() => [...CDN_MODELS.map((m) => `cdn:${m.key}`), ...(assets.data ?? []).filter((a) => a.kind === 'model').map((a) => a.id)], [assets.data]);
+  useEffect(() => {
+    let alive = true;
+    void import('./floor/modelTools').then(({ modelThumbnail }) =>
+      modelIds.forEach((id) => {
+        const url = modelUrl(id, assets.data ?? []);
+        if (url) void modelThumbnail(url).then((src) => alive && setThumbs((t) => (t[id] ? t : { ...t, [id]: src }))).catch(() => undefined);
+      })
+    );
+    return () => {
+      alive = false;
+    };
+  }, [modelIds, assets.data]);
 
   const removeSelected = () => {
     if (selection?.type !== 'element') return;
@@ -119,7 +229,19 @@ export const FloorDesignerPage: React.FC = () => {
     if (!canEdit) return;
     const onKey = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;
-      if (['INPUT', 'SELECT', 'TEXTAREA'].includes(target.tagName) || !selection) return;
+      if (['INPUT', 'SELECT', 'TEXTAREA'].includes(target.tagName)) return;
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z')) {
+        e.preventDefault();
+        if (e.shiftKey) redo();
+        else undo();
+        return;
+      }
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || e.key === 'Y')) {
+        e.preventDefault();
+        redo();
+        return;
+      }
+      if (!selection) return;
       const step = e.shiftKey ? 1 : 10;
       const move = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] }[e.key];
       if (move) {
@@ -150,6 +272,8 @@ export const FloorDesignerPage: React.FC = () => {
         allowOverlap,
       };
       await posApi.saveDesign(areaId, body);
+      past.current = [];
+      future.current = [];
       setDirty(false);
       await floor.reload();
     });
@@ -158,12 +282,13 @@ export const FloorDesignerPage: React.FC = () => {
     if (dirty && !window.confirm('Des modifications ne sont pas enregistrées. Les abandonner ?')) return;
     setDirty(false);
     setSelection(null);
+    past.current = [];
+    future.current = [];
     setAreaId(id);
   };
 
   if (floor.loading) return <Loading />;
   const areas = floor.data?.areas ?? [];
-  const lib = assets.data ?? [];
 
   return (
     <div className="space-y-4">
@@ -179,7 +304,7 @@ export const FloorDesignerPage: React.FC = () => {
         {(canLibrary || canEdit) && <TabBtn active={tab === 'library'} onClick={() => setTab('library')} icon={<Library size={15} />} label="Bibliothèque" />}
       </div>
 
-      {tab === 'library' && <LibraryPanel assets={lib} canManage={canLibrary} onChanged={() => void assets.reload()} />}
+      {tab === 'library' && <LibraryPanel assets={lib} thumbs={thumbs} canManage={canLibrary} onChanged={() => void assets.reload()} />}
       {tab === 'versions' && canEdit && <VersionsPanel dirty={dirty} />}
 
       {tab === 'plan' && canEdit && (
@@ -205,12 +330,15 @@ export const FloorDesignerPage: React.FC = () => {
           {draft && (
             <div className="grid xl:grid-cols-[1fr_320px] gap-4 items-start">
               <Card>
-                <div className="flex flex-wrap gap-1.5">
-                  {ELEMENT_KINDS.map((k) => (
-                    <Btn key={k} size="sm" onClick={() => addElement(k)}>
-                      + {KIND_LABEL[k]}
-                    </Btn>
-                  ))}
+                <Palette assets={lib} thumbs={thumbs} onAdd={(d) => void onDropItem(d, { x: draft.geometry.widthCm / 2, y: draft.geometry.depthCm / 2 }, selection)} />
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <Btn size="sm" variant="ghost" disabled={past.current.length === 0} onClick={undo} aria-label="Annuler" title="Annuler (Ctrl+Z)">
+                    <Undo2 size={15} />
+                  </Btn>
+                  <Btn size="sm" variant="ghost" disabled={future.current.length === 0} onClick={redo} aria-label="Rétablir" title="Rétablir (Ctrl+Y)">
+                    <Redo2 size={15} />
+                  </Btn>
+                  {busy && <span className="text-xs text-gray-500">Import en cours…</span>}
                   <span className="flex-1" />
                   <div className="flex rounded-lg border border-gray-200 overflow-hidden text-xs font-semibold">
                     {(['2d', '3d'] as const).map((v) => (
@@ -230,15 +358,17 @@ export const FloorDesignerPage: React.FC = () => {
                     editable
                     selection={selection}
                     onSelect={setSelection}
+                    onDropItem={onDropItem}
+                    modelThumbs={thumbs}
                     onMove={(s, x, y) => (s.type === 'table' ? setTable(s.id, { x, y }) : setElement(s.id, { x, y }))}
                   />
                 ) : (
                   <Suspense fallback={<Loading />}>
-                    <FloorScene3D className="h-[64vh] min-h-[380px]" geometry={draft.geometry} tables={draft.tables} elements={draft.elements} assets={lib} onTable={(id) => { setSelection({ type: 'table', id }); setView('2d'); }} />
+                    <FloorScene3D className="h-[64vh] min-h-[380px]" geometry={draft.geometry} tables={draft.tables} elements={draft.elements} assets={lib} onTable={(id) => { setSelection({ type: 'table', id }); setView('2d'); }} onDropItem={onDropItem} />
                   </Suspense>
                 )}
                 <p className="text-[11px] text-gray-500">
-                  Glisser pour déplacer (grille 10 cm) · flèches : ajuster (Maj = 1 cm) · R : pivoter · Suppr : retirer · Ctrl+D : dupliquer · molette : zoom
+                  Glissez un élément, un objet 3D ou une matière sur le plan (2D ou 3D), ou déposez vos fichiers .glb et images depuis l’ordinateur · flèches : ajuster (Maj = 1 cm) · R : pivoter · Suppr : retirer · Ctrl+D : dupliquer · Ctrl+Z / Ctrl+Y : annuler / rétablir
                 </p>
                 {warnings.length > 0 && (
                   <div className="rounded-lg bg-amber-50 text-amber-900 text-xs p-2 space-y-0.5">
@@ -385,7 +515,7 @@ const ElementPanel: React.FC<{ el: FloorElement; assets: FloorAsset[]; onChange:
         {el.kind !== 'zone' && el.kind !== 'window' && el.kind !== 'model' && <MaterialSelect label="Matériau" value={el.material} assets={assets} use="surface" allowNone onChange={(v) => onChange({ material: v })} />}
       </div>
       {el.kind === 'model' && (
-        <Field label="Modèle 3D">
+        <Field label="Modèle 3D" hint="La taille réelle du modèle est reprise à l’import ; ajustez-la ci-dessus si besoin.">
           <select className={inputCls} value={el.assetId ?? ''} onChange={(e) => onChange({ assetId: e.target.value || null })}>
             {models.map((m) => (
               <option key={m.id} value={m.id}>
@@ -475,25 +605,48 @@ const VersionsPanel: React.FC<{ dirty: boolean }> = ({ dirty }) => {
   );
 };
 
-const LibraryPanel: React.FC<{ assets: FloorAsset[]; canManage: boolean; onChanged: () => void }> = ({ assets, canManage, onChanged }) => {
+const LibraryPanel: React.FC<{ assets: FloorAsset[]; thumbs: Record<string, string>; canManage: boolean; onChanged: () => void }> = ({ assets, thumbs, canManage, onChanged }) => {
+  const [over, setOver] = useState(false);
   const [form, setForm] = useState({ kind: 'texture' as FloorAsset['kind'], name: '', url: '', tileCm: '100' });
   const { busy, error, run } = useAction();
+  // The type of a dropped or chosen file is detected: .glb is a 3D model, an image a texture.
   const add = (file?: File) =>
     run(async () => {
+      const kind: FloorAsset['kind'] = file ? (isModelFile(file) ? 'model' : form.kind === 'background' ? 'background' : 'texture') : form.kind;
       await posApi.addFloorAsset({
-        kind: form.kind,
-        name: (form.name.trim() || file?.name || 'Sans nom').slice(0, 80),
+        kind,
+        name: (form.name.trim() || file?.name.replace(/\.[a-z0-9]+$/i, '') || 'Sans nom').slice(0, 80),
         ...(file ? { dataUrl: await readFile(file) } : { url: form.url.trim() }),
-        ...(form.kind === 'texture' ? { tileCm: clamp(num(form.tileCm, 100), 10, 1000) } : {}),
+        ...(kind === 'texture' ? { tileCm: clamp(num(form.tileCm, 100), 10, 1000) } : {}),
       });
       setForm((f) => ({ ...f, name: '', url: '' }));
       onChanged();
     });
-  const accept = form.kind === 'model' ? '.glb,model/gltf-binary' : 'image/png,image/jpeg,image/webp';
+  const accept = '.glb,model/gltf-binary,image/png,image/jpeg,image/webp';
   return (
     <div className="grid lg:grid-cols-[1fr_360px] gap-4 items-start">
       <Card title="Bibliothèque du plan">
         <p className="text-xs text-gray-500">Textures de sol et de surfaces, modèles 3D (.glb) et plans d’architecte.</p>
+        {canManage && (
+          <div
+            onDragOver={(e) => {
+              if (e.dataTransfer.types.includes('Files')) {
+                e.preventDefault();
+                setOver(true);
+              }
+            }}
+            onDragLeave={() => setOver(false)}
+            onDrop={(e) => {
+              e.preventDefault();
+              setOver(false);
+              [...e.dataTransfer.files].filter((f) => isModelFile(f) || isImageFile(f)).forEach((f) => void add(f));
+            }}
+            className={cx('rounded-xl border-2 border-dashed p-4 text-center text-sm', over ? 'border-emerald-500 bg-emerald-50 text-emerald-800' : 'border-gray-200 text-gray-500')}
+          >
+            <Upload size={18} className="mx-auto mb-1" />
+            Déposez ici vos fichiers : modèles 3D (.glb, 10 Mo) et images (PNG, JPEG, WebP, 5 Mo). Le type est reconnu tout seul.
+          </div>
+        )}
         <ErrorNote message={error} />
         {assets.length === 0 ? (
           <Empty>La bibliothèque est vide : les matériaux et objets offerts ci-dessous sont déjà disponibles.</Empty>
@@ -502,9 +655,13 @@ const LibraryPanel: React.FC<{ assets: FloorAsset[]; canManage: boolean; onChang
             {assets.map((a) => (
               <li key={a.id} className="rounded-xl border border-gray-100 p-2 flex gap-2 items-center">
                 {a.kind === 'model' ? (
-                  <span className="w-14 h-14 rounded-lg bg-gray-100 flex items-center justify-center">
-                    <Box size={22} className="text-gray-500" />
-                  </span>
+                  thumbs[a.id] ? (
+                    <img src={thumbs[a.id]} alt="" className="w-14 h-14 rounded-lg object-contain bg-gray-50" />
+                  ) : (
+                    <span className="w-14 h-14 rounded-lg bg-gray-100 flex items-center justify-center">
+                      <Box size={22} className="text-gray-500" />
+                    </span>
+                  )
                 ) : (
                   <img src={a.url} alt="" className="w-14 h-14 rounded-lg object-cover bg-gray-100" loading="lazy" />
                 )}
@@ -533,8 +690,8 @@ const LibraryPanel: React.FC<{ assets: FloorAsset[]; canManage: boolean; onChang
               </span>
             ))}
             {CDN_MODELS.map((m) => (
-              <span key={m.key} className="flex items-center gap-1.5 text-xs rounded-full border border-gray-200 px-2 py-1">
-                <Box size={12} /> {m.label}
+              <span key={m.key} className="flex items-center gap-1.5 text-xs rounded-full border border-gray-200 pl-1 pr-2 py-1">
+                {thumbs[`cdn:${m.key}`] ? <img src={thumbs[`cdn:${m.key}`]} alt="" className="w-5 h-5 object-contain" /> : <Box size={12} />} {m.label}
               </span>
             ))}
           </div>
@@ -575,6 +732,79 @@ const LibraryPanel: React.FC<{ assets: FloorAsset[]; canManage: boolean; onChang
           <p className="text-sm text-gray-600">Consultation seule : l’ajout à la bibliothèque est réservé aux personnes ayant le droit « Bibliothèque 3D ».</p>
         </Card>
       )}
+    </div>
+  );
+};
+
+// --- Catalogue: drag onto the plan (or click to add in the middle) ---------------------------------
+
+const KIND_ICON: Record<ElementKind, React.ComponentType<{ size?: number; className?: string }>> = {
+  wall: BrickWall,
+  door: DoorOpen,
+  window: AppWindow,
+  counter: Store,
+  bar: Wine,
+  column: Columns3,
+  bench: Armchair,
+  plant: Sprout,
+  stairs: Footprints,
+  zone: SquareDashed,
+  decor: Frame,
+  model: Box,
+};
+
+const Tile: React.FC<{ data: Exclude<DropData, { kind: 'files' }>; label: string; onAdd: (d: DropData) => void; children: React.ReactNode }> = ({ data, label, onAdd, children }) => (
+  <button
+    type="button"
+    {...dragProps(data)}
+    onClick={() => onAdd(data)}
+    title={`${label} — glisser sur le plan ou cliquer`}
+    className="shrink-0 w-[76px] rounded-xl border border-gray-200 bg-white p-1.5 flex flex-col items-center gap-1 hover:border-emerald-400 active:scale-[0.97] cursor-grab"
+  >
+    <span className="w-12 h-12 rounded-lg bg-gray-50 flex items-center justify-center overflow-hidden">{children}</span>
+    <span className="text-[11px] leading-tight text-center text-gray-700 line-clamp-2">{label}</span>
+  </button>
+);
+
+const Palette: React.FC<{ assets: FloorAsset[]; thumbs: Record<string, string>; onAdd: (d: DropData) => void }> = ({ assets, thumbs, onAdd }) => {
+  const [group, setGroup] = useState<'elements' | 'models' | 'materials'>('elements');
+  const models = [...CDN_MODELS.map((m) => ({ id: `cdn:${m.key}`, name: m.label })), ...assets.filter((a) => a.kind === 'model').map((a) => ({ id: a.id, name: a.name }))];
+  const materials = [...MATERIALS.map((m) => m.key), ...assets.filter((a) => a.kind === 'texture').map((a) => `asset:${a.id}`)].map((key) => resolveMaterial(key, assets));
+  return (
+    <div className="space-y-2">
+      <div className="flex gap-1 text-xs font-semibold">
+        {([['elements', 'Éléments'], ['models', `Objets 3D (${models.length})`], ['materials', `Matières (${materials.length})`]] as const).map(([id, label]) => (
+          <button key={id} onClick={() => setGroup(id)} className={cx('px-3 py-1.5 rounded-lg border', group === id ? 'bg-gray-900 text-white border-gray-900' : 'bg-white border-gray-200 text-gray-700')}>
+            {label}
+          </button>
+        ))}
+      </div>
+      <div className="flex gap-1.5 overflow-x-auto pb-1">
+        {group === 'elements' &&
+          ELEMENT_KINDS.map((k) => {
+            const Icon = KIND_ICON[k];
+            return (
+              <Tile key={k} data={{ kind: 'element', value: k }} label={KIND_LABEL[k]} onAdd={onAdd}>
+                <Icon size={22} className="text-gray-600" />
+              </Tile>
+            );
+          })}
+        {group === 'models' &&
+          models.map((m) => (
+            <Tile key={m.id} data={{ kind: 'model', assetId: m.id }} label={m.name} onAdd={onAdd}>
+              {thumbs[m.id] ? <img src={thumbs[m.id]} alt="" className="w-full h-full object-contain" /> : <Box size={22} className="text-gray-400" />}
+            </Tile>
+          ))}
+        {group === 'materials' &&
+          materials.map((m) => (
+            <Tile key={m.key} data={{ kind: 'material', key: m.key }} label={m.label} onAdd={onAdd}>
+              <span className="w-full h-full" style={{ background: m.url ? `center/cover url(${m.url}), ${m.color}` : m.color }} />
+            </Tile>
+          ))}
+      </div>
+      <p className="text-[11px] text-gray-500">
+        {group === 'materials' ? 'Déposez une matière sur une table, un objet ou le sol. Un clic l’applique à la sélection, ou au sol.' : 'Glissez sur le plan à l’endroit voulu, ou cliquez pour placer au centre.'}
+      </p>
     </div>
   );
 };

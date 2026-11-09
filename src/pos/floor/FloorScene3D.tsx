@@ -5,7 +5,8 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { chairPositions, type AreaGeometry, type FloorElement, type PlanTable } from '../../data/floorScene';
 import type { FloorAsset } from '../api';
 import type { TableLook } from './FloorCanvas2D';
-import { modelUrl, resolveMaterial } from './materials';
+import { imageAssetUrl, modelUrl, resolveMaterial } from './materials';
+import { accepts, readDrop, type DropData } from './drop';
 
 // 3D view of one area (loaded on demand). Same data and same table states as the 2D plan; tapping
 // a table does the same thing. 1 plan cm = 0.01 scene unit (metres); plan y → scene z.
@@ -18,6 +19,7 @@ interface Props {
   look?: (t: PlanTable) => TableLook;
   onTable?: (id: string) => void;
   className?: string;
+  onDropItem?: (data: DropData, at: { x: number; y: number }, target: null) => void;
 }
 
 const M = 0.01;
@@ -141,6 +143,24 @@ const buildElement = (el: FloorElement, assets: FloorAsset[]): THREE.Object3D =>
       }
       break;
     }
+    case 'decor': {
+      const img = imageAssetUrl(el.assetId, assets);
+      if (img) {
+        // Picture stretched once over the footprint (rug, sign, logo), lying at its height.
+        const tex = textureLoader.load(img, undefined, undefined, () => undefined);
+        tex.colorSpace = THREE.SRGBColorSpace;
+        const plane = new THREE.Mesh(new THREE.PlaneGeometry(w, d), new THREE.MeshStandardMaterial({ map: tex, transparent: true, roughness: 0.85 }));
+        plane.rotation.x = -Math.PI / 2;
+        plane.position.y = Math.max(el.elevationCm, 0.3) * M;
+        plane.receiveShadow = true;
+        g.add(plane);
+        break;
+      }
+      const mesh = box(w, h, d, surface(el.material, assets, color, [el.width, el.elevationCm]));
+      mesh.position.y = h / 2;
+      g.add(mesh);
+      break;
+    }
     default: {
       const mesh = box(w, h, d, surface(el.material, assets, color, [el.width, el.elevationCm]));
       mesh.position.y = h / 2;
@@ -197,7 +217,7 @@ const buildTable = (t: PlanTable, l: TableLook, assets: FloorAsset[]): THREE.Gro
   return holder;
 };
 
-export const FloorScene3D: React.FC<Props> = ({ geometry, tables, elements, assets, look, onTable, className }) => {
+export const FloorScene3D: React.FC<Props> = ({ geometry, tables, elements, assets, look, onTable, className, onDropItem }) => {
   const host = useRef<HTMLDivElement>(null);
   const state = useRef<{ renderer: THREE.WebGLRenderer; scene: THREE.Scene; camera: THREE.PerspectiveCamera; controls: OrbitControls; content: THREE.Group } | null>(null);
   const onTableRef = useRef(onTable);
@@ -343,7 +363,31 @@ export const FloorScene3D: React.FC<Props> = ({ geometry, tables, elements, asse
     tables.forEach((tb) => s.content.add(buildTable(tb, look?.(tb) ?? { fill: '#f5efe6', stroke: '#8b6b4a' }, assets)));
   }, [geometry, tables, elements, assets, look]);
 
-  return <div ref={host} className={`rounded-xl overflow-hidden bg-stone-100 ${className ?? ''}`} />;
+  // Dropping in 3D: the point of the floor under the cursor.
+  const onDrop = (e: React.DragEvent) => {
+    const s = state.current;
+    if (!onDropItem || !s) return;
+    e.preventDefault();
+    const data = readDrop(e);
+    if (!data) return;
+    const r = s.renderer.domElement.getBoundingClientRect();
+    const ray = new THREE.Raycaster();
+    ray.setFromCamera(new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1), s.camera);
+    const p = ray.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), new THREE.Vector3());
+    if (!p) return;
+    onDropItem(data, { x: Math.round(p.x / M), y: Math.round(p.z / M) }, null);
+  };
+
+  return (
+    <div
+      ref={host}
+      className={`rounded-xl overflow-hidden bg-stone-100 ${className ?? ''}`}
+      onDragOver={(e) => {
+        if (onDropItem && accepts(e)) e.preventDefault();
+      }}
+      onDrop={onDrop}
+    />
+  );
 };
 
 export default FloorScene3D;

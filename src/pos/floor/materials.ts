@@ -34,6 +34,13 @@ export const modelUrl = (assetId: string | null, assets: FloorAsset[]): string |
   return assets.find((a) => a.id === assetId && a.kind === 'model')?.url ?? null;
 };
 
+/** Image of a library asset (texture or plan), used by decor pictures. */
+export const imageAssetUrl = (assetId: string | null, assets: FloorAsset[]): string | null => {
+  if (!assetId) return null;
+  const a = assets.find((x) => x.id === assetId);
+  return a && a.kind !== 'model' ? a.url : null;
+};
+
 export const backgroundUrl = (assetId: string | null, assets: FloorAsset[]): string | null => (assetId ? (assets.find((a) => a.id === assetId)?.url ?? null) : null);
 
 export const useImageSize = (url: string | null): { width: number; height: number } | null => {
