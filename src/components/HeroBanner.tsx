@@ -1,9 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import {
-  Monitor,
-  Wallet,
-  ShoppingCart,
-  FileText,
+  Monitor, Wallet, ShoppingCart, FileText, Coffee,
 } from 'lucide-react';
 
 interface HeroBannerProps {
@@ -100,7 +97,7 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
             <h2 className="text-white text-xl sm:text-2xl font-bold truncate group-hover:text-primary transition-colors duration-300">
               Café Noir
             </h2>
-            <span className="text-2xl sm:text-3xl select-none animate-pulse">☕</span>
+            <Coffee size={24} className="text-amber-200 shrink-0" aria-hidden />
           </div>
           <p className="text-slate-400 text-xs mt-1 group-hover:text-slate-300 transition-colors duration-300">
             Voici ce qui se passe dans votre café aujourd'hui.

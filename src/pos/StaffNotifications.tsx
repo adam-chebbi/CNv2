@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { BellRing, ClipboardList, CheckCircle2, HandPlatter, Receipt, XCircle } from 'lucide-react';
+import { BellRing, ClipboardList, CheckCircle2, HandPlatter, Receipt, VolumeX, XCircle } from 'lucide-react';
 import { apiGet } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import { usePosEvents } from '../hooks/usePosEvents';
@@ -26,17 +26,28 @@ const ICON: Record<Kind, React.ComponentType<{ size?: number; className?: string
   cancel_rejected: XCircle,
 };
 
-const beep = () => {
+// One audio context for the page. Browsers keep it suspended until a user gesture: the
+// "Activer le son" button resumes it, and stays visible while sound is blocked.
+let audio: AudioContext | null = null;
+const audioCtx = (): AudioContext | null => {
   try {
-    const ctx = new AudioContext();
-    const o = ctx.createOscillator();
-    o.frequency.value = 880;
-    o.connect(ctx.destination);
-    o.start();
-    o.stop(ctx.currentTime + 0.15);
+    audio ??= new AudioContext();
+    return audio;
   } catch {
-    /* no audio: the badge is enough */
+    return null;
   }
+};
+let lastBeep = 0;
+const beep = () => {
+  const ctx = audioCtx();
+  // Several events within a few seconds play one sound, not a burst.
+  if (!ctx || ctx.state !== 'running' || Date.now() - lastBeep < 3000) return;
+  lastBeep = Date.now();
+  const o = ctx.createOscillator();
+  o.frequency.value = 880;
+  o.connect(ctx.destination);
+  o.start();
+  o.stop(ctx.currentTime + 0.15);
 };
 
 export const StaffNotifications: React.FC<{ onOpen: (subId: string) => void }> = ({ onOpen }) => {
@@ -45,7 +56,14 @@ export const StaffNotifications: React.FC<{ onOpen: (subId: string) => void }> =
   const [items, setItems] = useState<Item[]>([]);
   const [actionsCount, setActionsCount] = useState<number | null>(null);
   const [open, setOpen] = useState(false);
+  const [soundBlocked, setSoundBlocked] = useState(() => audioCtx()?.state !== 'running');
   const known = useRef<Set<string> | null>(null);
+
+  // Tab title shows the count while the tab is in the background.
+  useEffect(() => {
+    const base = document.title.replace(/^\(\d+\) /, '');
+    document.title = items.length > 0 ? `(${items.length}) ${base}` : base;
+  }, [items.length]);
 
   const load = async () => {
     if (!isStaff) return;
@@ -68,6 +86,15 @@ export const StaffNotifications: React.FC<{ onOpen: (subId: string) => void }> =
   if (!isStaff) return null;
   return (
     <div className="relative flex items-center gap-1.5">
+      {soundBlocked && (
+        <button
+          onClick={() => void audioCtx()?.resume().then(() => setSoundBlocked(audioCtx()?.state !== 'running'))}
+          title="Le navigateur bloque le son des alertes"
+          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-amber-300 bg-amber-50 text-xs font-semibold text-amber-800 hover:bg-amber-100"
+        >
+          <VolumeX size={15} /> <span className="hidden sm:inline">Activer le son</span>
+        </button>
+      )}
       {actionsCount !== null && (
         <button
           onClick={() => onOpen('pos_actions')}

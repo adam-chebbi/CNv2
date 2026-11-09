@@ -209,7 +209,7 @@ export const ActivityHeatmap: React.FC<ActivityHeatmapProps> = ({ data }) => {
                   type="button"
                   onClick={handleCopy}
                   title="Copier les détails"
-                  className="p-1 rounded-md text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors cursor-pointer"
+                  className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors cursor-pointer"
                 >
                   {copied ? <Check size={12} className="text-emerald-500" /> : <Copy size={12} />}
                 </button>
@@ -217,7 +217,7 @@ export const ActivityHeatmap: React.FC<ActivityHeatmapProps> = ({ data }) => {
                   type="button"
                   onClick={() => setPinned(null)}
                   title="Fermer"
-                  className="p-1 rounded-md text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors cursor-pointer"
+                  className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors cursor-pointer"
                 >
                   <X size={12} />
                 </button>

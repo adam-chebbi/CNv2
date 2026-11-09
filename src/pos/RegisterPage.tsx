@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { ShoppingBag, Store, Utensils } from 'lucide-react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Banknote, Check, MousePointerClick, ShoppingBag, Store, Utensils } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 import type { CartLineInput } from '../data/pricing';
 import { computeCart } from '../data/pricing';
@@ -24,8 +24,16 @@ export const RegisterPage: React.FC = () => {
   const catalog = useLoader(() => withCache('catalog', () => posApi.catalog()), []);
   const discounts = useLoader(() => withCache('discounts', () => posApi.discounts()), []);
   const [offlineSale, setOfflineSale] = useState(false);
-  const [lines, setLines] = useState<CartLineInput[]>([]);
-  const [serviceType, setServiceType] = useState<'dine_in' | 'takeaway'>('takeaway');
+  // The ticket being built survives a refresh or a trip to another screen (kept on this device).
+  const [lines, setLines] = useState<CartLineInput[]>(() => readDraft().lines);
+  const [serviceType, setServiceType] = useState<'dine_in' | 'takeaway'>(() => readDraft().serviceType);
+  useEffect(() => writeDraft({ lines, serviceType }), [lines, serviceType]);
+  const searchRef = useRef<HTMLInputElement>(null);
+  const counts = useMemo(() => {
+    const m = new Map<string, number>();
+    lines.forEach((l) => m.set(l.articleId, (m.get(l.articleId) ?? 0) + l.quantity));
+    return m;
+  }, [lines]);
   const [saleKey, setSaleKey] = useState(newIdempotencyKey);
   const [paying, setPaying] = useState<SaleDetail | null>(null);
   const { busy, error, setError, run } = useAction();
@@ -65,6 +73,24 @@ export const RegisterPage: React.FC = () => {
     }
   }, [catalog.data, discounts.data, lines]);
 
+  // Keyboard: F2 search, F8 (or Ctrl+Entrée) encaisser, Échap vider la recherche.
+  const validateRef = useRef<() => void>(() => undefined);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      // Not while a window (options, payment) is open.
+      if (paying || document.querySelector('[role="dialog"]')) return;
+      if (e.key === 'F2') {
+        e.preventDefault();
+        searchRef.current?.focus();
+      } else if (e.key === 'F8' || (e.ctrlKey && e.key === 'Enter')) {
+        e.preventDefault();
+        validateRef.current();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [paying]);
+
   if (cash.loading || catalog.loading) return <Loading />;
 
   const session = cash.session;
@@ -88,6 +114,11 @@ export const RegisterPage: React.FC = () => {
       }
     });
 
+  validateRef.current = () => {
+    if (lines.length > 0 && !busy && hasPermission('pos:sell')) void validate();
+  };
+  const step = paying ? 3 : lines.length > 0 ? 2 : 1;
+
   const toggleAvailability = (articleId: string, current: string) =>
     run(async () => {
       if (!window.confirm(current === 'available' ? 'Marquer ce produit comme épuisé ?' : 'Remettre ce produit en vente ?')) return;
@@ -106,6 +137,7 @@ export const RegisterPage: React.FC = () => {
       ) : (
         <>
           <SessionBar session={session} onChange={(s) => (s ? cash.setSession(s) : void cash.refresh())} />
+          <Steps current={step} />
           <OfflineBanner />
           <PrintStatusBanner />
           <div className="grid lg:grid-cols-[1fr_380px] gap-4 items-start">
@@ -113,6 +145,8 @@ export const RegisterPage: React.FC = () => {
               {catalog.data && (
                 <ProductGrid
                   catalog={catalog.data}
+                  searchRef={searchRef}
+                  counts={counts}
                   onAdd={(line) => setLines((prev) => addLine(prev, line))}
                   onLongPress={hasPermission('pos:sell') ? (a) => void toggleAvailability(a.id, a.availability) : undefined}
                 />
@@ -141,14 +175,15 @@ export const RegisterPage: React.FC = () => {
                 </div>
               )}
               <Btn variant="primary" size="lg" className="w-full" busy={busy} disabled={lines.length === 0 || !hasPermission('pos:sell')} onClick={validate}>
-                Valider et encaisser
+                <Banknote size={20} /> Encaisser {preview && <Money mil={preview.totalMil} />}
+                <kbd className="hidden lg:inline ml-1 px-1.5 rounded bg-white/20 text-[11px] font-mono">F8</kbd>
               </Btn>
               {lines.length > 0 && (
                 <Btn variant="ghost" className="w-full" onClick={() => setLines([])}>
                   Vider la vente
                 </Btn>
               )}
-              <p className="text-[11px] text-gray-400">Astuce : clic droit (ou appui long) sur un produit pour le marquer épuisé.</p>
+              <p className="text-[11px] text-gray-400">Clic droit (ou appui long) sur un produit : le marquer épuisé.</p>
             </Card>
           </div>
         </>
@@ -182,3 +217,52 @@ export const RegisterPage: React.FC = () => {
     </div>
   );
 };
+
+// --- Ticket kept on the device ----------------------------------------------------------------------
+
+const DRAFT_KEY = 'cn_register_draft';
+type Draft = { lines: CartLineInput[]; serviceType: 'dine_in' | 'takeaway' };
+const readDraft = (): Draft => {
+  try {
+    const d = JSON.parse(localStorage.getItem(DRAFT_KEY) ?? 'null') as Draft | null;
+    if (d && Array.isArray(d.lines)) return { lines: d.lines, serviceType: d.serviceType === 'dine_in' ? 'dine_in' : 'takeaway' };
+  } catch {
+    /* unreadable: start empty */
+  }
+  return { lines: [], serviceType: 'takeaway' };
+};
+const writeDraft = (d: Draft): void => {
+  try {
+    if (d.lines.length === 0) localStorage.removeItem(DRAFT_KEY);
+    else localStorage.setItem(DRAFT_KEY, JSON.stringify(d));
+  } catch {
+    /* private mode: the ticket just isn't kept */
+  }
+};
+
+// --- Where am I: the three steps of a sale, the current one highlighted -----------------------------
+
+const STEPS = [
+  { n: 1, label: 'Choisir les produits', Icon: MousePointerClick },
+  { n: 2, label: 'Encaisser', Icon: Banknote },
+  { n: 3, label: 'Paiement et ticket', Icon: Check },
+];
+
+const Steps: React.FC<{ current: number }> = ({ current }) => (
+  <ol className="grid grid-cols-3 gap-2" aria-label="Étapes de la vente">
+    {STEPS.map(({ n, label, Icon }) => (
+      <li
+        key={n}
+        aria-current={n === current ? 'step' : undefined}
+        className={cx(
+          'flex items-center gap-2 rounded-xl border px-3 py-2 text-xs sm:text-sm font-semibold',
+          n === current ? 'border-emerald-500 bg-emerald-50 text-emerald-800' : n < current ? 'border-gray-200 text-gray-500' : 'border-gray-100 text-gray-400'
+        )}
+      >
+        <span className={cx('shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-xs', n === current ? 'bg-emerald-600 text-white' : 'bg-gray-100 text-gray-500')}>{n < current ? <Check size={13} /> : n}</span>
+        <Icon size={15} className="hidden sm:block shrink-0" />
+        <span className="truncate">{label}</span>
+      </li>
+    ))}
+  </ol>
+);

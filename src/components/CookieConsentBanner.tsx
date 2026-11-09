@@ -25,7 +25,7 @@ export const CookieConsentBanner: React.FC = () => {
           <button
             onClick={acceptNecessaryOnly}
             title="Fermer (cookies essentiels uniquement)"
-            className="p-1 rounded-md text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition cursor-pointer"
+            className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition cursor-pointer"
           >
             <X size={15} />
           </button>

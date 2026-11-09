@@ -1,14 +1,6 @@
 import React, { useState } from 'react';
 import {
-  Calendar as CalendarIcon,
-  Check,
-  ChevronDown,
-  ChevronUp,
-  Clock,
-  ArrowUpDown,
-  Filter,
-  Info,
-  HelpCircle,
+  Calendar as CalendarIcon, Check, ChevronDown, ChevronUp, Clock, ArrowUpDown, Filter, Info, HelpCircle, X,
 } from 'lucide-react';
 import { TimeFilterPeriod } from '../types';
 
@@ -220,9 +212,10 @@ export const AnalysisFilterBar: React.FC<AnalysisFilterBarProps> = ({
               </div>
               <button
                 onClick={() => setShowCustomModal(false)}
-                className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+                aria-label="Fermer"
+                className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:text-gray-200 dark:hover:bg-gray-800"
               >
-                ✕
+                <X size={14} />
               </button>
             </div>
 

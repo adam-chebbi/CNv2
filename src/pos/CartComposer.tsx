@@ -1,5 +1,5 @@
-import React, { useMemo, useState } from 'react';
-import { Minus, Plus, Search, Trash2 } from 'lucide-react';
+import React, { useMemo, useState, type RefObject } from 'react';
+import { Minus, Plus, Search, ShoppingCart, Trash2 } from 'lucide-react';
 import type { CartLineInput, PricedArticle, PricingCatalog } from '../data/pricing';
 import { priceLine } from '../data/pricing';
 import type { PosCatalog } from './api';
@@ -122,7 +122,10 @@ export const ProductGrid: React.FC<{
   onAdd: (line: CartLineInput) => void;
   allowInstruction?: boolean;
   onLongPress?: (article: PricedArticle) => void;
-}> = ({ catalog, onAdd, allowInstruction = true, onLongPress }) => {
+  searchRef?: RefObject<HTMLInputElement | null>;
+  // Quantity of each product already in the ticket, shown on its tile.
+  counts?: Map<string, number>;
+}> = ({ catalog, onAdd, allowInstruction = true, onLongPress, searchRef, counts }) => {
   const pricing = useMemo(() => toPricingCatalog(catalog), [catalog]);
   const [category, setCategory] = useState<string>('');
   const [query, setQuery] = useState('');
@@ -142,7 +145,21 @@ export const ProductGrid: React.FC<{
     <div className="space-y-3">
       <div className="relative">
         <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-        <input className={cx(inputCls, 'pl-9')} placeholder="Rechercher un produit…" value={query} onChange={(e) => setQuery(e.target.value)} />
+        <input
+          ref={searchRef}
+          className={cx(inputCls, 'pl-9')}
+          placeholder={searchRef ? 'Rechercher un produit…  (F2)' : 'Rechercher un produit…'}
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={(e) => {
+            // Enter adds the only match, Escape clears the search.
+            if (e.key === 'Enter' && visible.length === 1) {
+              choose(visible[0]);
+              setQuery('');
+            }
+            if (e.key === 'Escape') setQuery('');
+          }}
+        />
       </div>
       {!q && (
         <div className="flex gap-2 overflow-x-auto pb-1">
@@ -168,12 +185,21 @@ export const ProductGrid: React.FC<{
               }
             }}
             className={cx(
-              'min-h-[76px] rounded-xl border p-3 text-left transition active:scale-[0.98]',
-              a.availability === 'available' ? 'border-gray-200 bg-white hover:border-emerald-400' : 'border-gray-100 bg-gray-50 text-gray-400 cursor-not-allowed'
+              'relative min-h-[84px] rounded-xl border p-3 text-left transition active:scale-[0.98]',
+              a.availability !== 'available'
+                ? 'border-gray-100 bg-gray-50 text-gray-400 cursor-not-allowed'
+                : counts?.get(a.id)
+                  ? 'border-emerald-500 bg-emerald-50/60 hover:border-emerald-600'
+                  : 'border-gray-200 bg-white hover:border-emerald-400'
             )}
           >
-            <span className="block text-sm font-semibold leading-tight">{a.name}</span>
-            <span className="block text-xs mt-1">{a.availability === 'available' ? <Money mil={a.unitPriceMil} /> : 'Épuisé'}</span>
+            <span className="block text-sm font-semibold leading-tight pr-7">{a.name}</span>
+            <span className={cx('block mt-1', a.availability === 'available' ? 'text-sm font-bold text-emerald-700' : 'text-xs')}>{a.availability === 'available' ? <Money mil={a.unitPriceMil} /> : 'Épuisé'}</span>
+            {counts?.get(a.id) ? (
+              <span className="absolute top-2 right-2 min-w-[24px] h-6 px-1.5 rounded-full bg-emerald-600 text-white text-xs font-bold flex items-center justify-center" aria-label={`${counts.get(a.id)} dans le ticket`}>
+                {counts.get(a.id)}
+              </span>
+            ) : null}
           </button>
         ))}
       </div>
@@ -195,7 +221,13 @@ export const ProductGrid: React.FC<{
 
 export const CartLines: React.FC<{ catalog: PosCatalog; lines: CartLineInput[]; onChange: (lines: CartLineInput[]) => void }> = ({ catalog, lines, onChange }) => {
   const pricing = useMemo(() => toPricingCatalog(catalog), [catalog]);
-  if (lines.length === 0) return <p className="text-sm text-gray-400 py-6 text-center">Aucun article.</p>;
+  if (lines.length === 0)
+    return (
+      <div className="py-8 text-center text-gray-400">
+        <ShoppingCart size={28} className="mx-auto mb-2" />
+        <p className="text-sm">Touchez un produit pour l’ajouter au ticket.</p>
+      </div>
+    );
   return (
     <ul className="divide-y divide-gray-100">
       {lines.map((l, i) => {
@@ -218,16 +250,16 @@ export const CartLines: React.FC<{ catalog: PosCatalog; lines: CartLineInput[]; 
               {problem && <p className="text-xs text-red-600">{problem}</p>}
             </div>
             <div className="flex items-center gap-1">
-              <button aria-label="Moins" onClick={() => setQty(l.quantity - 1)} className="w-9 h-9 rounded-lg border border-gray-200 flex items-center justify-center">
+              <button aria-label="Moins" onClick={() => setQty(l.quantity - 1)} className="w-11 h-11 rounded-lg border border-gray-200 flex items-center justify-center hover:bg-gray-50">
                 <Minus size={14} />
               </button>
               <span className="w-6 text-center text-sm font-semibold">{l.quantity}</span>
-              <button aria-label="Plus" onClick={() => setQty(l.quantity + 1)} className="w-9 h-9 rounded-lg border border-gray-200 flex items-center justify-center">
+              <button aria-label="Plus" onClick={() => setQty(l.quantity + 1)} className="w-11 h-11 rounded-lg border border-gray-200 flex items-center justify-center hover:bg-gray-50">
                 <Plus size={14} />
               </button>
             </div>
             <span className="w-24 text-right text-sm font-semibold">{amount !== null ? <Money mil={amount} /> : '—'}</span>
-            <button aria-label="Retirer" onClick={() => setQty(0)} className="p-2 text-gray-400 hover:text-red-600">
+            <button aria-label="Retirer" onClick={() => setQty(0)} className="w-11 h-11 rounded-lg flex items-center justify-center text-gray-400 hover:text-red-600 hover:bg-red-50">
               <Trash2 size={15} />
             </button>
           </li>

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Settings2 } from 'lucide-react';
+import { Settings2, Check } from 'lucide-react';
 import type { PosSettings } from '../data/posSettings';
 import { posApi } from './api';
 import { DisplayLinks } from './DisplayLinks';
@@ -25,7 +25,7 @@ export const PosSettingsPage: React.FC = () => {
       <PageHeader
         icon={Settings2}
         title="Paramètres caisse & service"
-        actions={<Btn variant="primary" busy={busy} onClick={() => run(async () => { setS(await posApi.saveSettings(s)); setSaved(true); })}>{saved ? 'Enregistré ✓' : 'Enregistrer'}</Btn>}
+        actions={<Btn variant="primary" busy={busy} onClick={() => run(async () => { setS(await posApi.saveSettings(s)); setSaved(true); })}>{saved ? <><Check size={14} /> Enregistré</> : 'Enregistrer'}</Btn>}
       />
       <ErrorNote message={error} />
       <Card title="Caisse">

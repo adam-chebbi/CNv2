@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { BookOpen } from 'lucide-react';
+import { BookOpen, Ban } from 'lucide-react';
 import type { PricedArticle } from '../data/pricing';
 import { apiGet, apiPut } from '../api/client';
 import { posApi } from './api';
@@ -177,7 +177,7 @@ export const MenuSettingsPage: React.FC = () => {
         <ul className="space-y-1 text-sm">
           {currentPairs.map(([a, b]) => (
             <li key={`${a}|${b}`} className="flex items-center gap-2">
-              <span className="flex-1">{extraName(a)} ✕ {extraName(b)}</span>
+              <span className="flex-1 inline-flex items-center gap-1.5">{extraName(a)} <Ban size={13} className="text-red-500" aria-label="incompatible avec" /> {extraName(b)}</span>
               <Btn size="sm" variant="ghost" onClick={() => setPairs(currentPairs.filter(([x, y]) => !(x === a && y === b)))}>Retirer</Btn>
             </li>
           ))}

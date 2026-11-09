@@ -14,10 +14,10 @@ export const SCREEN_HELP: Record<string, ScreenHelp> = {
     steps: [
       "Si la caisse est fermée, appuyez sur « Ouvrir la caisse » et comptez le fond de caisse.",
       'Touchez les articles pour les ajouter au ticket. Touchez une ligne pour changer la quantité ou ajouter une remarque.',
-      'Appuyez sur « Encaisser », choisissez le mode de paiement (espèces, carte…) et validez.',
-      'Le ticket s’imprime. Pour les espèces, la monnaie à rendre s’affiche en grand.',
+      'Appuyez sur le grand bouton vert « Encaisser ». Espèces est déjà choisi : touchez le montant reçu (ou « Montant exact »), puis « Encaisser ».',
+      'La monnaie à rendre s’affiche en grand. Imprimez le ticket puis « Nouvelle vente ».',
     ],
-    tips: ['Un client veut payer en plusieurs fois ? Utilisez « Partager l’addition » dans l’écran de paiement.', 'En fin de service : « Clôturer la caisse » et comptez le tiroir.'],
+    tips: ['Un client veut payer en plusieurs fois ? Utilisez « Partager l’addition » dans l’écran de paiement.', 'En fin de service : « Clôturer » et comptez le tiroir.', 'Au clavier : F2 rechercher, F8 encaisser, F9 espèces au montant exact, F10 imprimer, Alt+M ouvrir le menu.', 'La vente en cours est gardée si la page se recharge.'],
   },
   pos_floor: {
     goal: 'Voir les tables et servir en salle.',

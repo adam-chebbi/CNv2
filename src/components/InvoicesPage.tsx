@@ -1,28 +1,7 @@
 import { DecimalInput } from './ui/DecimalInput';
 import React, { useMemo, useState } from 'react';
 import {
-  Receipt,
-  Search,
-  ChevronLeft,
-  ChevronRight,
-  ChevronDown,
-  FilterX,
-  Wallet,
-  Clock,
-  CheckCircle,
-  AlertTriangle,
-  Plus,
-  Truck,
-  Eye,
-  Pencil,
-  Trash2,
-  X,
-  AlertCircle,
-  ShieldCheck,
-  Loader2,
-  CheckCircle2,
-  CreditCard,
-  FileText,
+  Receipt, Search, ChevronLeft, ChevronRight, ChevronDown, FilterX, Wallet, Clock, CheckCircle, AlertTriangle, Plus, Truck, Eye, Pencil, Trash2, X, AlertCircle, ShieldCheck, Loader2, CheckCircle2, CreditCard, FileText,
 } from 'lucide-react';
 import { useQueryParam } from '../hooks/useQueryParam';
 import {
@@ -442,7 +421,7 @@ export const InvoicesPage: React.FC<InvoicesPageProps> = ({
                       <td className="py-3 px-4 text-gray-600 dark:text-gray-300">{linkedOrderNumber ?? <span className="text-gray-400">—</span>}</td>
                       <td className="py-3 px-4 text-gray-600 dark:text-gray-300 whitespace-nowrap">{formatDate(inv.invoiceDate)}</td>
                       <td className={`py-3 px-4 whitespace-nowrap font-semibold ${overdue ? 'text-red-600 dark:text-red-400' : dueSoon ? 'text-amber-600 dark:text-amber-400' : 'text-gray-600 dark:text-gray-300'}`}>
-                        {formatDate(inv.dueDate)}{overdue ? ' ⚠' : ''}
+                        <span className="inline-flex items-center gap-1">{formatDate(inv.dueDate)}{overdue && <AlertTriangle size={13} aria-label="En retard" />}</span>
                       </td>
                       <td className="py-3 px-4 text-right font-semibold text-gray-900 dark:text-white whitespace-nowrap">{formatAmount(inv.amountTTC)}</td>
                       <td className="py-3 px-4 text-right text-gray-600 dark:text-gray-300 whitespace-nowrap">{formatAmount(inv.amountPaid)}</td>

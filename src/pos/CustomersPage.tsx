@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Contact, Search } from 'lucide-react';
+import { Contact, Search, Star } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 import { posApi, type CustomerSummary } from './api';
 import { RESERVATION_LABELS } from './labels';
@@ -36,7 +36,7 @@ const CustomerFileModal: React.FC<{ id: string; onClose: () => void }> = ({ id, 
             <p className="font-semibold pt-2">Réservations</p>
             {c.reservations.length === 0 ? <p className="text-gray-400">—</p> : <ul>{c.reservations.map((r) => <li key={r.id}>{r.date} {r.time} · {r.people} pers. · {RESERVATION_LABELS[r.status] ?? r.status}</li>)}</ul>}
             <p className="font-semibold pt-2">Retours</p>
-            {c.feedback.length === 0 ? <p className="text-gray-400">—</p> : <ul>{c.feedback.map((f) => <li key={f.id}>{'★'.repeat(f.rating)} {f.comment}</li>)}</ul>}
+            {c.feedback.length === 0 ? <p className="text-gray-400">—</p> : <ul>{c.feedback.map((f) => <li key={f.id} className="flex items-start gap-2"><span className="inline-flex shrink-0 mt-0.5" aria-label={`${f.rating} sur 5`}>{Array.from({ length: 5 }, (_, i) => <Star key={i} size={12} className={i < f.rating ? 'fill-amber-400 text-amber-400' : 'text-gray-300'} />)}</span> {f.comment}</li>)}</ul>}
           </div>
           <div className="space-y-2">
             <p className="text-base font-bold">Fidélité : {c.loyalty.available} point(s) disponibles</p>

@@ -68,7 +68,7 @@ export const prepTicketDocument = (p: PrepTicketInput, duplicateNumber = 0): Pri
     lines.push({ t: 'text', text: `${l.quantity} × ${l.name.toUpperCase()}`, bold: true, size: 2 });
     if (l.variant) lines.push({ t: 'text', text: `   ${l.variant}` });
     l.extras.forEach((e) => lines.push({ t: 'text', text: `   + ${e}` }));
-    if (l.instruction) lines.push({ t: 'box', lines: [`${looksLikeAllergyNote(l.instruction) ? '⚠ ' : ''}${l.instruction}`] });
+    if (l.instruction) lines.push({ t: 'box', lines: [`${looksLikeAllergyNote(l.instruction) ? 'ALLERGIE : ' : ''}${l.instruction}`] });
     lines.push({ t: 'rule' });
   });
   lines.push({ t: 'feed', lines: 2 });

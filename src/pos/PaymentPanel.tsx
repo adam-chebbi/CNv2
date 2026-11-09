@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { BadgePercent, Banknote, CreditCard, Gift, Printer, Split, Ticket, UserRound } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 import { changeDue } from '../data/pricing';
@@ -236,6 +236,42 @@ export const PaymentPanel: React.FC<{ sale: SaleDetail; sessionId: string | null
 
   const lines = sale.orders.filter((o) => o.status === 'validated').flatMap((o) => o.lines.filter((l) => l.status === 'active'));
 
+  // Keyboard: F9 cash at the exact amount, Entrée encaisser, F10 print / reprint the ticket.
+  const keys = useRef({ pay, print, cashExact: () => undefined as unknown });
+  keys.current = {
+    pay,
+    print,
+    cashExact: () => {
+      setMethod('cash');
+      setAmount('');
+      return run(async () => {
+        if (!sessionId) throw new Error("Aucune session de caisse ouverte : ouvrez la caisse avant d'encaisser.");
+        const res = await posApi.pay(sale.id, { sessionId, method: 'cash', amountMil: due }, payKey);
+        setPayKey(newIdempotencyKey());
+        setLastChange(res.payment.changeMil);
+        update(res.sale);
+      });
+    },
+  };
+  const canPay = sale.status !== 'completed' && parts.length === 0 && hasPermission('pos:collect') && due > 0;
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (busy) return;
+      if (e.key === 'F9' && canPay && document.querySelectorAll('[role="dialog"]').length <= 1) {
+        e.preventDefault();
+        void keys.current.cashExact();
+      } else if (e.key === 'Enter' && canPay && (e.target === document.body || (e.target as HTMLElement).dataset?.payInput !== undefined) && document.querySelectorAll('[role="dialog"]').length <= 1) {
+        e.preventDefault();
+        void keys.current.pay();
+      } else if (e.key === 'F10' && sale.status === 'completed') {
+        e.preventDefault();
+        void keys.current.print();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [busy, canPay, sale.status]);
+
   return (
     <Modal title={sale.status === 'completed' ? `Ticket ${sale.ticketNumber}` : sale.tableName ? `Addition — ${sale.tableName}` : 'Encaissement'} onClose={onClose} wide>
       <ErrorNote message={error} />
@@ -290,7 +326,7 @@ export const PaymentPanel: React.FC<{ sale: SaleDetail; sessionId: string | null
               <Btn variant="primary" size="lg" onClick={print} busy={busy} disabled={printed && !hasPermission('pos:reprint')}>
                 <Printer size={18} /> {printed ? 'Réimprimer (duplicata)' : 'Imprimer le ticket'}
               </Btn>
-              <Btn onClick={onClose}>Terminé</Btn>
+              <Btn size="lg" onClick={onClose}>Nouvelle vente</Btn>
             </div>
           ) : parts.length > 0 ? (
             <SplitPayView sale={sale} parts={parts} sessionId={sessionId} onParts={setParts} onSale={update} />
@@ -311,16 +347,22 @@ export const PaymentPanel: React.FC<{ sale: SaleDetail; sessionId: string | null
                 })}
               </div>
               <Field label={method === 'cash' ? 'Montant reçu (DT)' : 'Montant (DT)'} hint={method === 'card' ? 'Saisie manuelle : le TPE n’est pas relié au logiciel.' : undefined}>
-                <input className={cx(inputCls, 'text-lg font-semibold')} inputMode="decimal" placeholder={formatDt(due, false)} value={amount} onChange={(e) => setAmount(e.target.value)} />
+                <input data-pay-input className={cx(inputCls, 'text-lg font-semibold')} inputMode="decimal" placeholder={formatDt(due, false)} value={amount} onChange={(e) => setAmount(e.target.value)} />
               </Field>
               {method === 'cash' && (
                 <div className="flex flex-wrap gap-2">
                   {quick.map((v) => (
-                    <Btn key={v} size="sm" onClick={() => setAmount(formatDt(v, false))}>
+                    <Btn key={v} size="sm" variant={v === due ? 'primary' : 'secondary'} onClick={() => setAmount(formatDt(v, false))}>
+                      {v === due && 'Montant exact · '}
                       <Money mil={v} />
                     </Btn>
                   ))}
                 </div>
+              )}
+              {entered !== null && entered < due && method === 'cash' && (
+                <p className="text-sm font-semibold text-amber-700">
+                  Paiement partiel : il restera <Money mil={due - entered} /> à régler.
+                </p>
               )}
               {method === 'cash' && previewChange > 0 && (
                 <p className="text-lg font-bold text-emerald-700">
@@ -329,7 +371,9 @@ export const PaymentPanel: React.FC<{ sale: SaleDetail; sessionId: string | null
               )}
               <Btn variant="primary" size="lg" className="w-full" busy={busy} disabled={!hasPermission('pos:collect') || effective <= 0} onClick={pay}>
                 Encaisser <Money mil={method === 'cash' ? Math.min(effective, due) : effective} />
+                <kbd className="hidden lg:inline ml-1 px-1.5 rounded bg-white/20 text-[11px] font-mono">Entrée</kbd>
               </Btn>
+              <p className="text-[11px] text-gray-400 hidden lg:block">Raccourcis : F9 espèces au montant exact · Entrée encaisser · F10 imprimer le ticket.</p>
               <div className="flex flex-wrap gap-2">
                 {hasPermission('pos:discount') && <DiscountBox sale={sale} onChange={update} />}
                 <Btn size="sm" busy={busy} onClick={() => run(async () => { const r = await posApi.printBill(sale.id, registerId ?? null, sessionId); if (!r.queued) await printBill(sale); })}>

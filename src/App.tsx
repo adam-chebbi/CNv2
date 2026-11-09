@@ -167,6 +167,23 @@ export default function App() {
   // constant (rather than removing the prop from every page) so the many existing
   // isDarkMode={isDarkMode} call sites throughout this file don't need to change.
   const isDarkMode = false;
+  const [pageTitle, setPageTitle] = useState('');
+  // The Caisse always uses the full width: the sidebar collapses whatever its state elsewhere and
+  // only reopens as an overlay (header button or Alt+M). Leaving the Caisse restores it.
+  const { hasPermission: canAccess } = useAuth();
+  const registerMode = activeTab === 'pos' && (activeSubItem === 'pos_register' || (!activeSubItem && canAccess('pos:sell')));
+  useEffect(() => {
+    setSidebarOpen(false);
+    if (!registerMode) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.altKey && e.key.toLowerCase() === 'm') {
+        e.preventDefault();
+        setSidebarOpen((open) => !open);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [registerMode]);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [showRefreshToast, setShowRefreshToast] = useState(false);
   const [isOnline, setIsOnline] = useState(() => typeof navigator === 'undefined' || navigator.onLine);
@@ -949,6 +966,8 @@ export default function App() {
           isDarkMode={isDarkMode}
           isCollapsed={isSidebarCollapsed}
           onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+          drawerOnly={registerMode}
+          onActiveLabel={setPageTitle}
         />
 
         {/* Workspace gutter — reclaims the sidebar's width automatically (flex-1) when it
@@ -969,6 +988,8 @@ export default function App() {
                 setActiveTab(tab);
                 if (tab !== 'sales') setActiveSubItem('');
               }}
+              pageTitle={pageTitle}
+              drawerMode={registerMode}
               onOpenPos={(subId) => {
                 setActiveTab('pos');
                 setActiveSubItem(subId);

@@ -1,20 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import {
-  Boxes,
-  Search,
-  ChevronLeft,
-  ChevronRight,
-  ChevronDown,
-  FilterX,
-  Wallet,
-  AlertTriangle,
-  TrendingDown,
-  Warehouse,
-  Building2,
-  ArrowRightLeft,
-  ClipboardList,
-  PackageMinus,
-  CalendarClock,
+  Boxes, Search, ChevronLeft, ChevronRight, ChevronDown, FilterX, Wallet, AlertTriangle, TrendingDown, Warehouse, Building2, ArrowRightLeft, ClipboardList, PackageMinus, CalendarClock, ArrowUpDown,
 } from 'lucide-react';
 import {
   StockProduct,
@@ -352,7 +338,7 @@ export const StockPage: React.FC<StockPageProps> = ({
                 >
                   <div className="flex items-center gap-1">
                     <span>Produit</span>
-                    <span className="text-[10px] opacity-70">⇅</span>
+                    <ArrowUpDown size={11} className="opacity-70" aria-hidden />
                   </div>
                 </th>
                 <th className="py-3.5 px-4">Catégorie</th>
@@ -370,7 +356,7 @@ export const StockPage: React.FC<StockPageProps> = ({
                 >
                   <div className="flex items-center gap-1 justify-center">
                     <span>{showBothZoneColumns ? 'Stock total' : 'Total (zone)'}</span>
-                    <span className="text-[10px] opacity-70">⇅</span>
+                    <ArrowUpDown size={11} className="opacity-70" aria-hidden />
                   </div>
                 </th>
                 <th className="py-3.5 px-4">Unité</th>
@@ -383,7 +369,7 @@ export const StockPage: React.FC<StockPageProps> = ({
                 >
                   <div className="flex items-center gap-1 justify-end">
                     <span>Valeur du stock</span>
-                    <span className="text-[10px] opacity-70">⇅</span>
+                    <ArrowUpDown size={11} className="opacity-70" aria-hidden />
                   </div>
                 </th>
               </tr>

@@ -1,29 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import {
-  TrendingUp,
-  ShoppingBag,
-  Download,
-  Search,
-  ChevronLeft,
-  ChevronRight,
-  ChevronDown,
-  Printer,
-  Calendar as CalendarIcon,
-  FilterX,
-  X,
-  Coffee,
-  Clock,
-  Sparkles,
-  CreditCard,
-  Banknote,
-  Smartphone,
-  CheckCircle2,
-  Receipt,
-  Utensils,
-  Ticket,
-  FileText,
-  Info,
-  Undo2,
+  TrendingUp, ShoppingBag, Download, Search, ChevronLeft, ChevronRight, ChevronDown, Printer, Calendar as CalendarIcon, FilterX, X, Coffee, Clock, Sparkles, CreditCard, Banknote, Smartphone, CheckCircle2, Receipt, Utensils, Ticket, FileText, Info, Undo2, ArrowUpDown,
 } from 'lucide-react';
 import {
   SaleTransaction,
@@ -899,7 +876,7 @@ export const SalesPage: React.FC<SalesPageProps> = ({
                 >
                   <div className="flex items-center gap-1">
                     <span>N° de vente</span>
-                    <span className="text-[10px] opacity-70">⇅</span>
+                    <ArrowUpDown size={11} className="opacity-70" aria-hidden />
                   </div>
                 </th>
                 <th className="py-3.5 px-4">Consommations & Articles Café</th>
@@ -911,7 +888,7 @@ export const SalesPage: React.FC<SalesPageProps> = ({
                 >
                   <div className="flex items-center gap-1">
                     <span>Total (TTC)</span>
-                    <span className="text-[10px] opacity-70">⇅</span>
+                    <ArrowUpDown size={11} className="opacity-70" aria-hidden />
                   </div>
                 </th>
                 <th
@@ -920,7 +897,7 @@ export const SalesPage: React.FC<SalesPageProps> = ({
                 >
                   <div className="flex items-center gap-1">
                     <span>Date & Heure</span>
-                    <span className="text-[10px] opacity-70">⇅</span>
+                    <ArrowUpDown size={11} className="opacity-70" aria-hidden />
                   </div>
                 </th>
                 <th className="py-3.5 px-4 text-center">Statut</th>
@@ -1332,14 +1309,14 @@ export const SalesPage: React.FC<SalesPageProps> = ({
                     <div className="space-y-3">
                       <button
                         onClick={handleThermalPrint}
-                        className="inline-flex items-center justify-center gap-2 rounded-md text-sm font-medium transition h-9 px-4 py-2 w-full bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer"
+                        className="inline-flex items-center justify-center gap-2 rounded-xl text-sm font-semibold transition min-h-[44px] px-4 py-2 w-full bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer"
                       >
                         <Printer className="h-4 w-4 mr-2" />
                         Impression thermique
                       </button>
                       <button
                         onClick={handleA4Print}
-                        className="inline-flex items-center justify-center gap-2 rounded-md text-sm font-medium transition h-9 px-4 py-2 w-full bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer"
+                        className="inline-flex items-center justify-center gap-2 rounded-xl text-sm font-semibold transition min-h-[44px] px-4 py-2 w-full bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer"
                       >
                         <FileText className="h-4 w-4 mr-2" />
                         A4 Imprimer
@@ -1355,14 +1332,14 @@ export const SalesPage: React.FC<SalesPageProps> = ({
                     <div className="space-y-3">
                       <button
                         onClick={handleDownloadHtml}
-                        className="inline-flex items-center justify-center gap-2 rounded-md text-sm font-medium transition h-9 px-4 py-2 w-full bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer"
+                        className="inline-flex items-center justify-center gap-2 rounded-xl text-sm font-semibold transition min-h-[44px] px-4 py-2 w-full bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer"
                       >
                         <Download className="h-4 w-4 mr-2" />
                         Fichier HTML
                       </button>
                       <button
                         onClick={handleGeneratePdf}
-                        className="inline-flex items-center justify-center gap-2 rounded-md text-sm font-medium transition h-9 px-4 py-2 w-full bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer"
+                        className="inline-flex items-center justify-center gap-2 rounded-xl text-sm font-semibold transition min-h-[44px] px-4 py-2 w-full bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer"
                       >
                         <FileText className="h-4 w-4 mr-2" />
                         Générer le fichier PDF

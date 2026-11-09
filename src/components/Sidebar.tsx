@@ -60,6 +60,10 @@ interface SidebarProps {
   onToggleCollapse?: () => void;
   activeSubItem?: string;
   setActiveSubItem?: (sub: string) => void;
+  // Caisse: the sidebar is hidden on every screen size and only opens as an overlay drawer.
+  drawerOnly?: boolean;
+  // Reports the label of the open page, shown in the top bar.
+  onActiveLabel?: (label: string) => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -72,6 +76,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onToggleCollapse,
   activeSubItem: propActiveSubItem,
   setActiveSubItem: propSetActiveSubItem,
+  drawerOnly = false,
+  onActiveLabel,
 }) => {
   const { hasPermission, logout, user } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
@@ -309,13 +315,23 @@ export const Sidebar: React.FC<SidebarProps> = ({
     })
     .filter((sec) => sec.items.length > 0);
 
+  const activeLabel = (() => {
+    const item = menuSections.flatMap((s) => s.items).find((i) => i.id === activeTab);
+    if (!item) return '';
+    const sub = item.subItems?.find((x) => x.id === activeSubItem);
+    return sub?.label ?? item.label;
+  })();
+  useEffect(() => {
+    onActiveLabel?.(activeLabel);
+  }, [activeLabel, onActiveLabel]);
+
   const handleParentClick = (item: MenuItem) => {
     if (item.subItems && item.subItems.length > 0) {
       toggleMenu(item.id);
     } else {
       setActiveTab(item.id);
       setActiveSubItem('');
-      if (window.innerWidth < 1024 && onClose) onClose();
+      if ((drawerOnly || window.innerWidth < 1024) && onClose) onClose();
     }
   };
 
@@ -327,7 +343,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       setActiveTab(parentId);
       setActiveSubItem(subId);
     }
-    if (window.innerWidth < 1024 && onClose) onClose();
+    if ((drawerOnly || window.innerWidth < 1024) && onClose) onClose();
   };
 
   return (
@@ -337,21 +353,21 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <div
           id="sidebar-backdrop"
           onClick={onClose}
-          className="fixed inset-0 bg-black/40 z-40 lg:hidden backdrop-blur-xs transition-opacity"
+          className={`fixed inset-0 bg-black/40 z-40 backdrop-blur-xs transition-opacity ${drawerOnly ? '' : 'lg:hidden'}`}
         />
       )}
 
       <aside
         id="main-sidebar"
-        className={`fixed lg:sticky top-0 left-0 h-screen ${
-          isCollapsed ? 'lg:w-16 w-64' : 'w-64'
+        className={`fixed ${drawerOnly ? '' : 'lg:sticky'} top-0 left-0 h-screen ${
+          isCollapsed && !drawerOnly ? 'lg:w-16 w-64' : 'w-64'
         } ${
           isDarkMode ? 'bg-[#151D2A] text-gray-200' : 'bg-white text-gray-700'
         } z-50 flex flex-col transition-all duration-300 ease-in-out ${
-          isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
+          isOpen ? 'translate-x-0' : drawerOnly ? '-translate-x-full' : '-translate-x-full lg:translate-x-0'
         }`}
       >
-        {isCollapsed ? (
+        {isCollapsed && !drawerOnly ? (
           /* Collapsed Icon-Only View matching sales.png */
           <div className="flex flex-col h-full items-center py-3 select-none">
             {/* Logo box */}
@@ -388,7 +404,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         setActiveTab(item.id);
                         setActiveSubItem('');
                       }
-                      if (window.innerWidth < 1024 && onClose) onClose();
+                      if ((drawerOnly || window.innerWidth < 1024) && onClose) onClose();
                     }}
                     title={item.label}
                     className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors cursor-pointer group relative ${
