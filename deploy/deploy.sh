@@ -33,7 +33,9 @@ esac
 cd "$APP_DIR"
 log() { echo "[$(date '+%H:%M:%S')] $*"; }
 
-PREV=$(git rev-parse HEAD)
+# PREV_REV: the version running before a "git pull" done ahead of this script (so the rollback
+# target is the real previous version, not the code just pulled).
+PREV="${PREV_REV:-$(git rev-parse HEAD)}"
 if [ -f "$DB" ]; then
   log "Sauvegarde de la base"
   DB_PATH="$DB" BACKUP_DIR="$(dirname "$DB")/backups" npx tsx server/scripts/backup.ts
