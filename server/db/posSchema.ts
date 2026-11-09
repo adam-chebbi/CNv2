@@ -557,7 +557,6 @@ CREATE TABLE IF NOT EXISTS loyalty_ledger (
   created_at TEXT NOT NULL
 );
 -- A sale credits points once, to one account (§12.2).
-CREATE UNIQUE INDEX IF NOT EXISTS idx_loyalty_one_earn_per_sale ON loyalty_ledger(sale_id) WHERE type = 'earn';
 CREATE INDEX IF NOT EXISTS idx_loyalty_ledger_customer ON loyalty_ledger(customer_id);
 
 -- Rewards applied to an open bill; turned into a 'redeem' entry when the sale is settled.
@@ -669,6 +668,7 @@ export const applyPosSchema = (db: Db): void => {
   db.exec(TEAM_AND_EQUIPMENT);
   applyServiceUpgrades(db);
   applyFloorDesign(db);
+  applySplitBills(db);
   // A register exists out of the box; more can be added from the settings.
   const hasRegister = db.prepare('SELECT 1 FROM cash_registers LIMIT 1').get();
   if (!hasRegister) {
@@ -833,4 +833,32 @@ const applyFloorDesign = (db: Db): void => {
   addColumn(db, 'floor_areas', 'background_y', 'background_y INTEGER NOT NULL DEFAULT 0');
   addColumn(db, 'dining_tables', 'chairs', 'chairs INTEGER');
   addColumn(db, 'dining_tables', 'material', 'material TEXT');
+};
+
+// --- Split bill (amélioration 08): one bill, several payers -----------------------------------------
+const SPLIT_BILLS = `
+CREATE TABLE IF NOT EXISTS sale_splits (
+  id TEXT PRIMARY KEY,
+  sale_id TEXT NOT NULL REFERENCES pos_sales(id),
+  part INTEGER NOT NULL,
+  parts INTEGER NOT NULL,
+  mode TEXT NOT NULL CHECK (mode IN ('items', 'equal', 'amount')),
+  label TEXT,
+  amount_mil INTEGER NOT NULL CHECK (amount_mil >= 0),
+  paid_mil INTEGER NOT NULL DEFAULT 0,
+  line_ids TEXT NOT NULL DEFAULT '[]',
+  customer_id TEXT REFERENCES customers(id),
+  created_by TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  UNIQUE (sale_id, part)
+);
+`;
+
+const applySplitBills = (db: Db): void => {
+  db.exec(SPLIT_BILLS);
+  addColumn(db, 'pos_payments', 'split_id', 'split_id TEXT');
+  // Points are earned once per sale, or once per part when the bill is split between payers.
+  addColumn(db, 'loyalty_ledger', 'split_id', 'split_id TEXT');
+  db.exec(`DROP INDEX IF EXISTS idx_loyalty_one_earn_per_sale;
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_loyalty_one_earn_per_part ON loyalty_ledger(sale_id, COALESCE(split_id, '')) WHERE type = 'earn';`);
 };

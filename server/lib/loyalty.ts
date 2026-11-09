@@ -190,6 +190,16 @@ onSaleCompleted((sale, by) => {
 
   const settings = readLoyaltySettings();
   if (!settings.enabled) return;
+  // Split bill: each payer earns on their own part (credited when the part is paid).
+  if (db.prepare('SELECT 1 FROM sale_splits WHERE sale_id = ? LIMIT 1').get(sale.id)) return;
+  const points = pointsFor(Math.min(eligibleOfSale(sale), sale.total_mil), settings);
+  if (points <= 0) return;
+  creditEarn(sale.customer_id, points, sale.id, null, `Ticket ${sale.ticket_number}`, by.name);
+});
+
+/** Amount of a sale that earns points (excluded categories/products removed, after discounts). */
+export const eligibleOfSale = (sale: SaleRow): number => {
+  const settings = readLoyaltySettings();
   const lines = activeLinesOfSale(sale.id);
   const cart = applyTicketDiscounts(lines.map(storedLineToPriced), loadActiveDiscountRules(), {
     now: new Date(),
@@ -201,21 +211,25 @@ onSaleCompleted((sale, by) => {
     lines.map((l, i) => ({ articleId: l.article_id, category: l.category, paidMil: cart.lines[i]?.totalMil ?? 0 })),
     settings
   );
-  const points = pointsFor(Math.min(eligible, sale.total_mil), settings);
-  if (points <= 0) return;
+  return eligible;
+};
+
+export const creditEarn = (customerId: string, points: number, saleId: string, splitId: string | null, reason: string, by: string): void => {
+  const settings = readLoyaltySettings();
   const expiresAt = settings.validityDays > 0 ? new Date(Date.now() + settings.validityDays * 86_400_000).toISOString() : null;
-  // The unique index (one 'earn' per sale) makes a second credit impossible, whatever the path.
-  db.prepare(`INSERT OR IGNORE INTO loyalty_ledger (id, customer_id, type, points, sale_id, reason, expires_at, created_by, created_at) VALUES (?, ?, 'earn', ?, ?, ?, ?, ?, ?)`).run(
+  // The unique index (one 'earn' per sale, or per part) makes a second credit impossible, whatever the path.
+  db.prepare(`INSERT OR IGNORE INTO loyalty_ledger (id, customer_id, type, points, sale_id, split_id, reason, expires_at, created_by, created_at) VALUES (?, ?, 'earn', ?, ?, ?, ?, ?, ?, ?)`).run(
     randomUUID(),
-    sale.customer_id,
+    customerId,
     points,
-    sale.id,
-    `Ticket ${sale.ticket_number}`,
+    saleId,
+    splitId,
+    reason,
     expiresAt,
-    by.name,
-    now
+    by,
+    new Date().toISOString()
   );
-});
+};
 
 // A credit note takes back points in proportion to what was refunded (§12.3).
 export const reversePointsForAdjustment = (saleId: string, adjustedMil: number, by: Actor): void => {

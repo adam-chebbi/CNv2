@@ -93,6 +93,14 @@ export const posApi = {
     key: string
   ) => apiPostOnce<{ amountMil: number; sale: SaleDetail; adjustments: Adjustment[] }>(`/pos/sales/${saleId}/corrections`, body, key),
   adjustments: (saleId: string) => apiGet<Adjustment[]>(`/pos/sales/${saleId}/adjustments`),
+  saleSplits: (saleId: string) => apiGet<SalePart[]>(`/pos/sales/${saleId}/splits`),
+  splitSale: (saleId: string, body: { mode: 'items'; parts: { lineIds: string[]; label?: string; customerId?: string | null }[] } | { mode: 'equal'; count: number } | { mode: 'amount'; parts: { amountMil: number; label?: string }[] }) =>
+    apiPost<SalePart[]>(`/pos/sales/${saleId}/split`, body),
+  unsplitSale: (saleId: string) => apiDelete<SalePart[]>(`/pos/sales/${saleId}/split`),
+  setSplitCustomer: (saleId: string, splitId: string, customerId: string | null) => apiPatch<SalePart[]>(`/pos/sales/${saleId}/splits/${splitId}`, { customerId }),
+  paySplit: (saleId: string, splitId: string, body: { sessionId: string; method: PaymentMethod; amountMil: number }, key: string) =>
+    apiPostOnce<{ sale: SaleDetail; splits: SalePart[]; payment: { id: string; amountMil: number; changeMil: number } }>(`/pos/sales/${saleId}/splits/${splitId}/payments`, body, key),
+  splitReceipt: (saleId: string, splitId: string) => apiGet<import('../data/receipts').PrintDocument>(`/pos/sales/${saleId}/splits/${splitId}/receipt-document`),
   setSaleCustomer: (saleId: string, customerId: string | null) =>
     apiPost<SaleDetail>(`/pos/sales/${saleId}/customer`, { customerId, confirmedByCustomer: true }),
   saleRewards: (saleId: string) => apiGet<{ available: number; balance?: number; rewards: (Reward & { applied: boolean })[] }>(`/pos/sales/${saleId}/rewards`),
@@ -477,6 +485,20 @@ export interface Feedback {
   internalNotes: string | null;
   handledBy: string | null;
   createdAt: string;
+}
+
+export interface SalePart {
+  id: string;
+  part: number;
+  parts: number;
+  mode: 'items' | 'equal' | 'amount';
+  label: string | null;
+  amountMil: number;
+  paidMil: number;
+  dueMil: number;
+  lineIds: string[];
+  customerId: string | null;
+  customerName: string | null;
 }
 
 export interface CustomerSummary {

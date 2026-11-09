@@ -116,7 +116,7 @@ export interface ReceiptSale {
   paidMil: number;
   ticketDiscounts: { label: string; amountMil: number }[];
   vat: { rate: number; baseMil: number; vatMil: number }[];
-  orders: { status: string; lines: { status: string; quantity: number; displayName: string; grossMil: number; itemDiscounts: { label: string; amountMil: number }[] }[] }[];
+  orders: { status: string; lines: { id?: string; status: string; quantity: number; displayName: string; grossMil: number; itemDiscounts: { label: string; amountMil: number }[] }[] }[];
   payments: { kind: string; method: string; amountMil: number; tenderedMil: number | null; changeMil: number }[];
 }
 
@@ -169,6 +169,41 @@ export const receiptDocument = (sale: ReceiptSale, duplicateNumber = 0, reviewUr
   if (reviewUrl) lines.push({ t: 'text', text: 'Votre avis compte :', align: 'center' }, { t: 'qr', data: reviewUrl });
   lines.push({ t: 'feed', lines: 2 });
   return { title: `Ticket ${sale.ticketNumber ?? ''}`, lines };
+};
+
+export interface SplitPart {
+  part: number;
+  parts: number;
+  label: string | null;
+  amountMil: number;
+  paidMil: number;
+  /** items of this payer (split by item); null for an equal or free-amount share */
+  lineIds: string[] | null;
+  payments: ReceiptSale['payments'];
+}
+
+// One payer's receipt when the bill is split (amélioration 08): their items or their share.
+export const splitReceiptDocument = (sale: ReceiptSale, p: SplitPart): PrintDocument => {
+  const lines: ReceiptLine[] = [...header()];
+  lines.push(
+    { t: 'text', text: `${sale.ticketNumber ? `Ticket ${sale.ticketNumber}` : 'Addition'} — part ${p.part}/${p.parts}`, align: 'center', bold: true },
+    ...(p.label ? [{ t: 'text', text: p.label, align: 'center' } as ReceiptLine] : []),
+    { t: 'text', text: tunisTime(new Date().toISOString(), true), align: 'center' },
+    ...context(sale),
+    { t: 'rule' }
+  );
+  if (p.lineIds) {
+    const mine = new Set(p.lineIds);
+    lines.push(...itemLines({ ...sale, orders: sale.orders.map((o) => ({ ...o, lines: o.lines.filter((l) => l.id && mine.has(l.id)) })) }));
+  } else lines.push({ t: 'row', left: `Part ${p.part} sur ${p.parts} de l'addition`, right: money(p.amountMil) }, { t: 'row', left: 'Total de la table', right: money(sale.totalMil) });
+  lines.push({ t: 'rule' }, { t: 'row', left: 'VOTRE PART', right: formatDt(p.amountMil), bold: true, size: 2 }, { t: 'rule' });
+  p.payments.forEach((pay) => {
+    lines.push({ t: 'row', left: `${PAYMENT_LABELS[pay.method] ?? pay.method}${pay.tenderedMil ? ` (reçu ${money(pay.tenderedMil)})` : ''}`, right: money(pay.amountMil) });
+    if (pay.changeMil) lines.push({ t: 'row', left: 'Monnaie rendue', right: money(pay.changeMil) });
+  });
+  if (p.paidMil < p.amountMil) lines.push({ t: 'row', left: 'Reste à régler', right: money(p.amountMil - p.paidMil), bold: true });
+  lines.push({ t: 'rule' }, { t: 'text', text: 'Merci de votre visite !', align: 'center' }, { t: 'feed', lines: 2 });
+  return { title: `Part ${p.part}/${p.parts}`, lines };
 };
 
 // Provisional bill: never a sales receipt, never numbered (§2.6).

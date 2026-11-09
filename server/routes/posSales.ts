@@ -130,6 +130,8 @@ posSalesRouter.post('/sales/:id/payments', requirePermission('pos:collect'), (re
   const body = paymentSchema.parse(req.body);
   const user = req.user!;
   runIdempotent(req, res, `payment:${req.params.id}`, () => {
+    // A split bill is settled part by part (amélioration 08).
+    if (db.prepare('SELECT 1 FROM sale_splits WHERE sale_id = ? LIMIT 1').get(req.params.id)) throw new ApiError(409, 'Cette addition est partagée : encaissez part par part.');
     const session = getOpenSession(body.sessionId);
     const { sale, payment } = recordPayment(req.params.id, session.id, body, actorOf(user));
     // Cash: the drawer opens if one is connected to this register's printer (amélioration 04).

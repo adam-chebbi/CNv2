@@ -29,6 +29,7 @@ import { cashSessionsRouter } from './routes/cashSessions.js';
 import { posSalesRouter } from './routes/posSales.js';
 import { floorRouter } from './routes/floor.js';
 import { floorDesignRouter } from './routes/floorDesign.js';
+import { splitsRouter } from './routes/splits.js';
 import { prepRouter } from './routes/prep.js';
 import { clientRouter } from './routes/client.js';
 import { serviceDeskRouter } from './routes/serviceDesk.js';
@@ -125,6 +126,7 @@ export const createApp = (): express.Express => {
   app.use('/api/pos', posSalesRouter);
   app.use('/api/pos', floorRouter);
   app.use('/api/pos', floorDesignRouter);
+  app.use('/api/pos', splitsRouter);
   app.use('/api/pos', prepRouter);
   app.use('/api/pos', serviceDeskRouter);
   app.use('/api/pos', cancellationsRouter);

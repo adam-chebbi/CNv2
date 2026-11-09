@@ -1,11 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { BadgePercent, Banknote, CreditCard, Gift, Printer, Ticket, UserRound } from 'lucide-react';
+import { BadgePercent, Banknote, CreditCard, Gift, Printer, Split, Ticket, UserRound } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 import { changeDue } from '../data/pricing';
 import { CASH_STEP_MILLIMES, formatDt, parseDtInput } from '../data/money';
 import { PAYMENT_METHOD_LABELS, type PaymentMethod } from '../data/cashSession';
 import { newIdempotencyKey } from '../hooks/usePosEvents';
-import { posApi, type CustomerSummary, type SaleDetail } from './api';
+import { posApi, type CustomerSummary, type SaleDetail, type SalePart } from './api';
+import { SplitPayView, SplitSetupModal } from './SplitBill';
 import { printBill, printTicket } from './ticket';
 import { Badge, Btn, cx, ErrorNote, Field, inputCls, Modal, Money, useAction } from './ui';
 
@@ -176,7 +177,12 @@ export const PaymentPanel: React.FC<{ sale: SaleDetail; sessionId: string | null
   const [lastChange, setLastChange] = useState<number | null>(null);
   const [payKey, setPayKey] = useState(newIdempotencyKey);
   const [printed, setPrinted] = useState(initial.printCount > 0);
+  const [parts, setParts] = useState<SalePart[]>([]);
+  const [splitting, setSplitting] = useState(false);
   const { busy, error, run } = useAction();
+  useEffect(() => {
+    void posApi.saleSplits(initial.id).then(setParts).catch(() => setParts([]));
+  }, [initial.id]);
 
   const update = (s: SaleDetail) => {
     setSale(s);
@@ -286,6 +292,8 @@ export const PaymentPanel: React.FC<{ sale: SaleDetail; sessionId: string | null
               </Btn>
               <Btn onClick={onClose}>Terminé</Btn>
             </div>
+          ) : parts.length > 0 ? (
+            <SplitPayView sale={sale} parts={parts} sessionId={sessionId} onParts={setParts} onSale={update} />
           ) : (
             <>
               <div className="grid grid-cols-3 gap-2">
@@ -327,12 +335,27 @@ export const PaymentPanel: React.FC<{ sale: SaleDetail; sessionId: string | null
                 <Btn size="sm" busy={busy} onClick={() => run(async () => { const r = await posApi.printBill(sale.id, registerId ?? null, sessionId); if (!r.queued) await printBill(sale); })}>
                   <Printer size={14} /> Imprimer l'addition
                 </Btn>
+                {sale.paidMil === 0 && sale.totalMil > 0 && hasPermission('pos:collect') && (
+                  <Btn size="sm" onClick={() => setSplitting(true)}>
+                    <Split size={14} /> Partager l'addition
+                  </Btn>
+                )}
               </div>
               <CustomerBox sale={sale} onChange={update} />
             </>
           )}
         </div>
       </div>
+      {splitting && (
+        <SplitSetupModal
+          sale={sale}
+          onClose={() => setSplitting(false)}
+          onDone={(p) => {
+            setParts(p);
+            setSplitting(false);
+          }}
+        />
+      )}
     </Modal>
   );
 };
