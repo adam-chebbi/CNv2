@@ -28,6 +28,7 @@ import { posCatalogRouter } from './routes/posCatalog.js';
 import { cashSessionsRouter } from './routes/cashSessions.js';
 import { posSalesRouter } from './routes/posSales.js';
 import { floorRouter } from './routes/floor.js';
+import { contentSecurityPolicy, opsRouter, requestMetrics } from './lib/ops.js';
 import { floorDesignRouter } from './routes/floorDesign.js';
 import { splitsRouter } from './routes/splits.js';
 import { insightsRouter } from './routes/insights.js';
@@ -82,6 +83,8 @@ export const createApp = (): express.Express => {
     res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
     next();
   });
+  app.use(contentSecurityPolicy);
+  app.use(requestMetrics);
   app.use(express.json({ limit: '15mb' }));
   app.use(cookieParser());
   // Runs on every request (app shell + API) so the CSRF cookie is already set before the first
@@ -89,6 +92,8 @@ export const createApp = (): express.Express => {
   app.use(ensureCsrfCookie);
   // Print agents authenticate with their own token (no cookie): outside the CSRF guard.
   app.use('/api/agent', agentRouter);
+  // Health probe and CSP reports: public, no session, no CSRF token (amélioration 10).
+  app.use('/api', opsRouter);
   app.use('/api', csrfProtection);
 
   app.use('/api/auth', authRouter);
@@ -146,8 +151,17 @@ export const createApp = (): express.Express => {
   app.use(errorMiddleware);
 
   const distDir = path.join(__dirname, '..', 'dist');
-  app.use(express.static(distDir));
+  // Hashed build assets never change: cache them for a year; the HTML shell is always revalidated
+  // so a new version is picked up on the next load.
+  app.use(
+    express.static(distDir, {
+      setHeaders: (res, file) => {
+        res.setHeader('Cache-Control', file.includes(`${path.sep}assets${path.sep}`) ? 'public, max-age=31536000, immutable' : 'no-cache');
+      },
+    })
+  );
   app.get(/.*/, (_req, res) => {
+    res.setHeader('Cache-Control', 'no-cache');
     res.sendFile(path.join(distDir, 'index.html'));
   });
   return app;
