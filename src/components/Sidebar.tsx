@@ -25,7 +25,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 import { HISTORIQUE_ACCESS_PERMISSION, HISTORIQUE_URL, MANAGE_ROLES_PERMISSION } from '../data/rbacModel';
-import { POS_ADMIN_PAGES, POS_PAGES } from '../pos/PosModule';
+import { hubPermissions, POS_ADMIN_HUBS, POS_HUBS } from '../pos/PosModule';
 
 interface SubMenuItem {
   id: string;
@@ -34,6 +34,8 @@ interface SubMenuItem {
   // behind it). The real enforcement is always server-side (requirePermission); this only keeps
   // the nav from listing pages a user's every request to would 403 on.
   permission?: string;
+  // Shown when any of these rights is held (a menu entry grouping several screens).
+  anyPermission?: string[];
 }
 
 interface MenuItem {
@@ -80,6 +82,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onActiveLabel,
 }) => {
   const { hasPermission, logout, user } = useAuth();
+  const subAllowed = (sub: SubMenuItem) => (sub.anyPermission ? sub.anyPermission.some(hasPermission) : !sub.permission || hasPermission(sub.permission));
   const [searchQuery, setSearchQuery] = useState('');
   // Mobile only: the account row (name + arrow, at the bottom of the drawer) opens this as a
   // full-screen panel rather than expanding inline — there's no room in a phone-width drawer for
@@ -118,10 +121,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
     {
       heading: 'Caisse & service',
       items: [
-        { id: 'pos', label: 'Caisse & service', icon: Store, subItems: POS_PAGES.map((p) => ({ id: p.id, label: p.label, permission: p.permission })) },
-        ...(POS_ADMIN_PAGES.length > 0
-          ? [{ id: 'pos_admin', label: 'Paramétrage caisse', icon: SlidersHorizontal, subItems: POS_ADMIN_PAGES.map((p) => ({ id: p.id, label: p.label, permission: p.permission })) }]
-          : []),
+        { id: 'pos', label: 'Caisse & service', icon: Store, subItems: POS_HUBS.map((h) => ({ id: h.id, label: h.label, anyPermission: hubPermissions(h) })) },
+        { id: 'pos_admin', label: 'Paramétrage caisse', icon: SlidersHorizontal, subItems: POS_ADMIN_HUBS.map((h) => ({ id: h.id, label: h.label, anyPermission: hubPermissions(h) })) },
       ],
     },
     {
@@ -245,12 +246,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
   // enforcement is always server-side, see requirePermission in server/middleware/auth.ts.
   const isMenuItemVisible = (item: MenuItem): boolean => {
     if (item.subItems && item.subItems.length > 0) {
-      return item.subItems.some((sub) => !sub.permission || hasPermission(sub.permission));
+      return item.subItems.some(subAllowed);
     }
     return !item.permission || hasPermission(item.permission);
   };
   const visibleSubItems = (item: MenuItem): SubMenuItem[] =>
-    (item.subItems ?? []).filter((sub) => !sub.permission || hasPermission(sub.permission));
+    (item.subItems ?? []).filter(subAllowed);
 
   // "Ventes" is the one subitem routed via its own top-level tab id ('sales') rather than its
   // parent's ('sales_mgmt') — every other parent routes all of its subitems through its own id.

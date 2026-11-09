@@ -78,15 +78,12 @@ export const SCREEN_HELP: Record<string, ScreenHelp> = {
     goal: 'Dessiner la salle à l’échelle : murs, bar, tables, décor.',
     steps: [
       'Choisissez la salle, puis réglez sa taille en mètres.',
-      'Ajoutez un élément depuis la barre (table, mur, bar, plante…) et faites-le glisser.',
+      'Dans le catalogue (Éléments, Objets 3D, Matières), glissez ce que vous voulez sur le plan, en 2D ou en 3D. Vous pouvez aussi déposer vos fichiers .glb et vos images depuis l’ordinateur : ils apparaissent à l’endroit du dépôt, à leur taille réelle.',
+      'Une matière ou une image déposée sur une table ou un objet devient son revêtement ; sur le sol vide, une image devient un tapis ou une décoration.',
       'Les flèches du clavier déplacent l’élément sélectionné ; « Suppr » le retire.',
       'Appuyez sur « Enregistrer ». Une alerte s’affiche si deux tables se chevauchent ou si un passage est trop étroit.',
     ],
-    tips: ['« Versions » garde un plan été / hiver que vous pouvez remettre quand la salle est vide.'],
-  },
-  pos_floor_library: {
-    goal: 'Ajouter des textures, des objets 3D ou le plan de l’architecte.',
-    steps: ['Collez un lien (https) ou envoyez un fichier depuis l’ordinateur.', 'Donnez-lui un nom clair : il apparaîtra dans le concepteur du plan.'],
+    tips: ['Ctrl+Z annule, Ctrl+Y rétablit.', '« Versions » garde un plan été / hiver que vous pouvez remettre quand la salle est vide.'],
   },
   pos_setup: {
     goal: 'Préparer la caisse avant la première utilisation.',

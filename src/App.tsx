@@ -215,6 +215,14 @@ export default function App() {
   // request requires roles:manage, see server/middleware/auth.ts). This just prevents a user
   // without the permission from sitting on a blank/erroring screen if they land here directly
   // (e.g. a stale bookmark from before their role was downgraded).
+  // Service staff (waiter, cashier, cook…) without the dashboard open straight on their own screen.
+  useEffect(() => {
+    if (activeTab === 'dashboard' && !hasPermission('dashboard:view') && ['pos:sell', 'floor:view', 'prep:kitchen', 'prep:bar', 'timeclock:self'].some(hasPermission)) {
+      setActiveTab('pos');
+      setActiveSubItem('');
+    }
+  }, [activeTab, hasPermission, setActiveTab, setActiveSubItem]);
+
   useEffect(() => {
     if (activeTab === 'roles_permissions' && !hasPermission('roles:manage')) {
       setActiveTab('dashboard');
@@ -1711,7 +1719,7 @@ export default function App() {
                 />
               </Suspense>
             ) : activeTab === 'pos' || activeTab === 'pos_admin' ? (
-              <PosModule subId={activeSubItem} />
+              <PosModule subId={activeSubItem} section={activeTab} />
             ) : activeTab === 'roles_permissions' ? (
               <Suspense fallback={<StockPageLoadingFallback />}>
                 <RolesPermissionsPage
