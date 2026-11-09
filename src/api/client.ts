@@ -5,6 +5,16 @@
 
 export class ApiError extends Error {}
 
+// Shown when the server gives no explanation (proxy page, crash…), in words the staff understand.
+const STATUS_MESSAGES: Record<number, string> = {
+  401: 'Votre session a expiré. Reconnectez-vous.',
+  403: "Votre profil ne permet pas cette action. Demandez à la direction.",
+  404: "Élément introuvable : il a peut-être été supprimé. Actualisez la page.",
+  413: 'Fichier trop volumineux.',
+  429: 'Trop de tentatives. Patientez une minute puis réessayez.',
+  500: 'Le serveur a rencontré un problème. Réessayez dans un instant.',
+};
+
 const CSRF_COOKIE = 'csrf_token';
 const CSRF_HEADER = 'X-CSRF-Token';
 
@@ -44,7 +54,7 @@ const request = async <T,>(path: string, options: RequestOptions = {}): Promise<
   const data = isJson ? await res.json() : undefined;
 
   if (!res.ok) {
-    const message = data?.error?.message ?? `Erreur ${res.status}`;
+    const message = data?.error?.message ?? STATUS_MESSAGES[res.status] ?? (res.status >= 500 ? STATUS_MESSAGES[500] : `Erreur ${res.status}`);
     throw new ApiError(message);
   }
 

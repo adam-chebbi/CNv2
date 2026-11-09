@@ -17,6 +17,7 @@
     "check": "npm run lint && npm run server:typecheck && npm test",
     "seed:pos-demo": "tsx server/scripts/seed-pos-demo.ts",
     "seed:floor-demo": "tsx server/scripts/seed-floor-demo.ts",
+    "reset-password": "tsx server/scripts/reset-password.ts",
     "backup": "tsx server/scripts/backup.ts",
     "backup:verify": "tsx server/scripts/verify-backup.ts"
   },

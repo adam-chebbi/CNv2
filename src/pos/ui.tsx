@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { AlertCircle, Loader2, X } from 'lucide-react';
 import { formatDt } from '../data/money';
+import { ApiError } from '../api/client';
 
 // Small building blocks shared by the point-of-sale screens: large touch targets (≥ 44 px),
 // the app's emerald accent, French labels.
@@ -141,6 +142,13 @@ export const inputCls = 'w-full rounded-xl border border-gray-200 px-3 py-2 text
 
 // Loads data, exposes a reload and the last error. Keeps the previous data while reloading so
 // live screens don't flicker on every event.
+// Browser/network errors ("Failed to fetch", JSON parse…) mean nothing to the staff: say what to do.
+export const friendlyError = (err: unknown): string => {
+  if (err instanceof ApiError) return err.message;
+  if (typeof navigator !== 'undefined' && !navigator.onLine) return 'Pas de connexion internet. Vérifiez le wifi puis réessayez.';
+  return 'Le serveur ne répond pas. Patientez quelques secondes puis réessayez.';
+};
+
 export const useLoader = <T,>(load: () => Promise<T>, deps: unknown[] = []) => {
   const [data, setData] = useState<T | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -153,7 +161,7 @@ export const useLoader = <T,>(load: () => Promise<T>, deps: unknown[] = []) => {
       setData(result);
       setError(null);
     } catch (err) {
-      setError((err as Error).message);
+      setError(friendlyError(err));
     } finally {
       setLoading(false);
     }
@@ -176,7 +184,7 @@ export const useAction = () => {
     try {
       return await fn();
     } catch (err) {
-      setError((err as Error).message);
+      setError(friendlyError(err));
       return undefined;
     } finally {
       setBusy(false);
