@@ -342,7 +342,8 @@ floorRouter.get('/floor/waiters', requireAnyPermission('tables:assign', 'floor:v
     .prepare(
       `SELECT DISTINCT u.id, u.full_name FROM users u JOIN roles r ON r.id = u.role_id
        LEFT JOIN role_permissions rp ON rp.role_id = r.id AND rp.permission_key = 'orders:take'
-       WHERE u.is_active = 1 AND (r.is_system = 1 OR rp.permission_key IS NOT NULL) ORDER BY u.full_name`
+       WHERE u.is_active = 1 AND (r.is_system = 1 OR rp.permission_key IS NOT NULL
+         OR EXISTS (SELECT 1 FROM user_permissions up WHERE up.user_id = u.id AND up.permission_key = 'orders:take')) ORDER BY u.full_name`
     )
     .all() as { id: string; full_name: string }[];
   res.json(rows.map((r) => ({ id: r.id, name: r.full_name })));

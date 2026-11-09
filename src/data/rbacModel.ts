@@ -248,6 +248,9 @@ export interface RbacUser {
   employeeName: string | null;
   isActive: boolean;
   createdAt: string;
+  lastLoginAt: string | null;
+  // Rights granted to this person on top of their profile ("if granted").
+  extraPermissions: string[];
 }
 
 export interface RbacValidationIssue {
@@ -271,17 +274,17 @@ export const validateDraftRole = (draft: Pick<DraftRole, 'name'>, existingRoles:
 // Starter grants created once at boot (server/rbac/bootstrap.ts); the direction adjusts them
 // afterwards from Rôles & permissions. Direction gets the whole catalog.
 
-const SERVICE_BASE = ['floor:view', 'orders:take', 'orders:validate', 'visits:manage', 'cancel:request', 'actions:view', 'products:view'];
+// Rights matrix of "Roles, flows and screens": what each profile does without anything extra.
+// Everything marked "if granted" there is turned on per person by the Direction (user grants).
+const SERVICE_BASE = ['floor:view', 'orders:take', 'visits:manage', 'cancel:request', 'actions:view', 'products:view'];
 
 export const PROFILE_STARTER_PERMISSIONS: Record<string, string[]> = {
+  // Runs the live service; register, discounts, stock, reports and table reassignment if granted.
   [GERANT_ROLE_NAME]: [
     ...SERVICE_BASE,
-    'dashboard:view', 'notifications:view', 'sales:view',
-    'pos:sell', 'pos:collect', 'pos:discount', 'pos:history', 'pos:reprint', 'pos:correct',
-    'cash:view', 'cash:open', 'cash:movement', 'cash:close',
-    'tables:all', 'tables:assign', 'prep:kitchen', 'prep:bar', 'prep:update', 'cancel:approve',
-    'reservations:view', 'reservations:manage', 'customers:view', 'customers:manage', 'feedback:manage',
-    'stock:view', 'activity_log:view',
+    'orders:validate', 'notifications:view',
+    'tables:all', 'prep:kitchen', 'prep:bar', 'prep:update', 'cancel:approve',
+    'reservations:view', 'reservations:manage', 'customers:view', 'feedback:manage',
   ],
   [CAISSE_ROLE_NAME]: [
     ...SERVICE_BASE,
@@ -304,7 +307,7 @@ export const PROFILE_DESCRIPTIONS: Record<string, string> = {
 
 // Grants added after the first release of the profiles. Each wave is applied once to the roles that
 // already exist (flag in pos_settings), so a later revocation by the direction is never undone.
-export const PROFILE_GRANT_WAVES: { flag: string; grants: Record<string, string[]> }[] = [
+export const PROFILE_GRANT_WAVES: { flag: string; grants: Record<string, string[]>; revokes?: Record<string, string[]> }[] = [
   {
     flag: 'rbac_wave_insights',
     grants: {
@@ -329,6 +332,21 @@ export const PROFILE_GRANT_WAVES: { flag: string; grants: Record<string, string[
       [SERVEUR_ROLE_NAME]: ['timeclock:self', 'stats:self'],
       [CUISINE_ROLE_NAME]: ['timeclock:self'],
       [BAR_ROLE_NAME]: ['timeclock:self'],
+    },
+  },
+  {
+    // Align the profiles on the rights matrix: these become "if granted", per person.
+    flag: 'rbac_wave_rights_matrix',
+    grants: {},
+    revokes: {
+      [GERANT_ROLE_NAME]: [
+        'dashboard:view', 'sales:view', 'reports:view', 'insights:view', 'activity_log:view', 'stats:team',
+        'pos:sell', 'pos:collect', 'pos:discount', 'pos:history', 'pos:reprint', 'pos:correct',
+        'cash:view', 'cash:open', 'cash:movement', 'cash:close',
+        'tables:assign', 'stock:view', 'equipment:view', 'customers:manage',
+      ],
+      [CAISSE_ROLE_NAME]: ['orders:validate'],
+      [SERVEUR_ROLE_NAME]: ['orders:validate'],
     },
   },
 ];

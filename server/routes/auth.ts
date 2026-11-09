@@ -6,6 +6,7 @@ import { db } from '../db/connection.js';
 import { asyncHandler, ApiError, notFound } from '../middleware/errors.js';
 import { requireAuth, requireAuthAllowPendingPasswordChange, SESSION_COOKIE } from '../middleware/auth.js';
 import { hashPassword, verifyPassword } from '../lib/password.js';
+import { effectivePermissions } from '../lib/permissions.js';
 
 interface UserRow {
   id: string;
@@ -27,9 +28,7 @@ interface PermissionRow {
 // Login's response shape mirrors requireAuth's req.user exactly, so the client's AuthContext can
 // use the same AuthUser type for both the initial /auth/me fetch and the result of login().
 const buildAuthResponseUser = (row: UserRow) => {
-  const permissions = row.role_id
-    ? (db.prepare('SELECT permission_key FROM role_permissions WHERE role_id = ?').all(row.role_id) as PermissionRow[]).map((r) => r.permission_key)
-    : [];
+  const permissions = effectivePermissions(row.id, row.role_id);
   return {
     id: row.id,
     fullName: row.full_name,

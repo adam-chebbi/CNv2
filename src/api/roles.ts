@@ -19,3 +19,4 @@ export const updateRbacUser = (id: string, user: Partial<{ fullName: string; ema
 export const resetRbacUserPassword = (id: string) => apiPost<void>(`/users/${id}/reset-password`);
 export const deactivateRbacUser = (id: string) => apiPost<RbacUser>(`/users/${id}/deactivate`, {});
 export const reactivateRbacUser = (id: string) => apiPost<RbacUser>(`/users/${id}/reactivate`, {});
+export const setRbacUserPermissions = (id: string, permissions: string[]) => apiPut<RbacUser>(`/users/${id}/permissions`, { permissions });

@@ -455,3 +455,13 @@ CREATE TABLE IF NOT EXISTS revenue_entries (
   updated_by TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_revenue_entries_date ON revenue_entries(revenue_date);
+
+-- Rights turned on for one person on top of their profile ("if granted" in the rights matrix):
+-- the Direction grants them per user; every change is written to the activity log.
+CREATE TABLE IF NOT EXISTS user_permissions (
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  permission_key TEXT NOT NULL,
+  granted_by TEXT NOT NULL,
+  granted_at TEXT NOT NULL,
+  PRIMARY KEY (user_id, permission_key)
+);

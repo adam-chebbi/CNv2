@@ -139,6 +139,10 @@ const seedStaffProfiles = (): void => {
       const role = getRoleByName(name);
       if (role) keys.forEach((key) => insertPermission.run(role.id, key));
     });
+    Object.entries(wave.revokes ?? {}).forEach(([name, keys]) => {
+      const role = getRoleByName(name);
+      if (role) keys.forEach((key) => db.prepare('DELETE FROM role_permissions WHERE role_id = ? AND permission_key = ?').run(role.id, key));
+    });
     markDone(wave.flag);
   });
 };

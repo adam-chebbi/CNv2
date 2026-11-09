@@ -6,7 +6,7 @@ import { asyncHandler, ApiError, notFound } from '../middleware/errors.js';
 import { requireAnyPermission, requireAuth, requirePermission } from '../middleware/auth.js';
 import { recordActivity } from '../lib/activity.js';
 import { emitPosEvent } from '../lib/events.js';
-import { assertTableAccess, assignedTableIds, canSeeAllTables } from '../lib/posAccess.js';
+import { assertTableAccess, assignedTableIds, canSeeAllTables, hasPermission } from '../lib/posAccess.js';
 import {
   actorOf,
   getOrderRow,
@@ -388,13 +388,74 @@ registerActionProvider(() => {
   }));
 });
 
-serviceDeskRouter.get('/actions', requireAnyPermission('actions:view'), asyncHandler((req, res) => {
-  const user = req.user!;
+const actionsFor = (user: AuthedUser) => {
   const seeAll = canSeeAllTables(user);
   const mine = assignedTableIds(user.id);
-  const items = actionProviders
+  return actionProviders
     .flatMap((p) => p(user))
     .filter((item) => seeAll || !item.tableId || mine.has(item.tableId))
     .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
-  res.json(items);
+};
+
+serviceDeskRouter.get('/actions', requireAnyPermission('actions:view'), asyncHandler((req, res) => {
+  res.json(actionsFor(req.user!));
+}));
+
+// Staff notifications ("Roles, flows and screens", waiter): ready to serve, waiter call and bill asked
+// on the person's tables, and the decision on their own cancellation requests. Derived from the live
+// state, so an item disappears by itself once handled. Also the count of actions to handle, shown
+// as a badge in the top bar on every screen.
+serviceDeskRouter.get('/my-notifications', asyncHandler((req, res) => {
+  const user = req.user!;
+  const seeAll = canSeeAllTables(user);
+  const mine = assignedTableIds(user.id);
+  const isMine = (tableId: string | null, waiterId: string | null) => seeAll || waiterId === user.id || (tableId !== null && mine.has(tableId));
+  const items: { id: string; kind: 'ready' | 'call_waiter' | 'bill' | 'cancel_approved' | 'cancel_rejected'; tableName: string | null; text: string; at: string }[] = [];
+
+  if (hasPermission(user, 'floor:view') || hasPermission(user, 'orders:take')) {
+    const ready = db
+      .prepare(
+        `SELECT l.id, l.display_name, l.quantity, l.ready_at, v.table_id, v.primary_waiter_id, t.name AS table_name
+         FROM pos_order_lines l JOIN pos_orders o ON o.id = l.order_id
+         LEFT JOIN visits v ON v.id = o.visit_id LEFT JOIN dining_tables t ON t.id = v.table_id
+         WHERE l.prep_status = 'ready' AND l.status = 'active' ORDER BY l.ready_at`
+      )
+      .all() as { id: string; display_name: string; quantity: number; ready_at: string; table_id: string | null; primary_waiter_id: string | null; table_name: string | null }[];
+    ready.filter((r) => isMine(r.table_id, r.primary_waiter_id)).forEach((r) =>
+      items.push({ id: `ready:${r.id}`, kind: 'ready', tableName: r.table_name, text: `${r.quantity} × ${r.display_name} prêt à servir`, at: r.ready_at })
+    );
+    const calls = db
+      .prepare(
+        `SELECT sr.id, sr.type, sr.created_at, sr.press_count, sr.table_id, v.primary_waiter_id, t.name AS table_name
+         FROM service_requests sr JOIN visits v ON v.id = sr.visit_id JOIN dining_tables t ON t.id = sr.table_id
+         WHERE sr.status = 'open'`
+      )
+      .all() as { id: string; type: 'call_waiter' | 'bill'; created_at: string; press_count: number; table_id: string; primary_waiter_id: string | null; table_name: string }[];
+    calls.filter((c) => isMine(c.table_id, c.primary_waiter_id)).forEach((c) =>
+      items.push({
+        id: `sr:${c.id}`, kind: c.type, tableName: c.table_name, at: c.created_at,
+        text: (c.type === 'bill' ? 'Addition demandée' : 'Appel serveur') + (c.press_count > 1 ? ` (${c.press_count} fois)` : ''),
+      })
+    );
+  }
+
+  const since = new Date(Date.now() - 2 * 3600_000).toISOString();
+  const decided = db
+    .prepare(
+      `SELECT c.id, c.status, c.description, c.decided_by, c.decided_at, c.decision_note, t.name AS table_name
+       FROM cancellation_requests c LEFT JOIN visits v ON v.id = c.visit_id LEFT JOIN dining_tables t ON t.id = v.table_id
+       WHERE c.requester_id = ? AND c.status != 'pending' AND c.decided_at >= ? ORDER BY c.decided_at DESC`
+    )
+    .all(user.id, since) as { id: string; status: 'approved' | 'rejected'; description: string; decided_by: string | null; decided_at: string; decision_note: string | null; table_name: string | null }[];
+  decided.forEach((c) =>
+    items.push({
+      id: `cancel:${c.id}`, kind: c.status === 'approved' ? 'cancel_approved' : 'cancel_rejected', tableName: c.table_name, at: c.decided_at,
+      text: `Annulation ${c.status === 'approved' ? 'acceptée' : 'refusée'} : ${c.description}${c.decided_by ? ` (${c.decided_by})` : ''}${c.decision_note ? ` — ${c.decision_note}` : ''}`,
+    })
+  );
+
+  res.json({
+    items: items.sort((x, y) => y.at.localeCompare(x.at)),
+    actionsCount: hasPermission(user, 'actions:view') ? actionsFor(user).length : null,
+  });
 }));

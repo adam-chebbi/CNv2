@@ -10,6 +10,7 @@ import {
   ClipboardList,
 } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
+import { StaffNotifications } from '../pos/StaffNotifications';
 import { useInstallPrompt } from '../hooks/useInstallPrompt';
 import { HISTORIQUE_ACCESS_PERMISSION, HISTORIQUE_URL, MANAGE_ROLES_PERMISSION } from '../data/rbacModel';
 
@@ -21,6 +22,8 @@ interface HeaderProps {
   onToggleCollapse?: () => void;
   activeTab?: string;
   onNavigate?: (tab: string) => void;
+  // Opens a point-of-sale screen (notifications, actions to handle).
+  onOpenPos?: (subId: string) => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -31,6 +34,7 @@ export const Header: React.FC<HeaderProps> = ({
   onToggleCollapse,
   activeTab = 'dashboard',
   onNavigate,
+  onOpenPos,
 }) => {
   const [showUserMenu, setShowUserMenu] = useState(false);
   const { user, logout, hasPermission } = useAuth();
@@ -90,6 +94,7 @@ export const Header: React.FC<HeaderProps> = ({
 
         {/* Right: Controls (Company user profile) */}
         <div className="flex items-center gap-2 sm:gap-3">
+          {onOpenPos && <StaffNotifications onOpen={onOpenPos} />}
           {/* Company User profile dropdown — desktop only. On phones/small tablets these same
               actions (Sessions, Paramètres, Rôles & permissions, Déconnexion) live at the bottom
               of the mobile sidebar drawer instead, since this trigger has no visible label below

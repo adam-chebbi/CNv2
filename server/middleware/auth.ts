@@ -1,6 +1,7 @@
 import type { NextFunction, Request, Response } from 'express';
 import { db } from '../db/connection.js';
 import { ApiError } from './errors.js';
+import { effectivePermissions } from '../lib/permissions.js';
 
 export interface AuthedUser {
   id: string;
@@ -84,9 +85,7 @@ export const resolveAuthedUser = (req: Request): { user: AuthedUser; token: stri
   db.prepare('UPDATE sessions SET last_seen_at = ? WHERE token = ?').run(new Date().toISOString(), token);
 
   const isSuperAdmin = row.is_system === 1;
-  const permissions = row.role_id
-    ? (db.prepare('SELECT permission_key FROM role_permissions WHERE role_id = ?').all(row.role_id) as PermissionRow[]).map((r) => r.permission_key)
-    : [];
+  const permissions = effectivePermissions(row.id, row.role_id);
 
   return {
     token,

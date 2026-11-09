@@ -1,15 +1,15 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   ShieldCheck, Loader2, AlertCircle, Plus, Trash2, Pencil, X, Check, Lock, Users as UsersIcon, KeyRound,
-  CheckCircle2, RotateCcw, UserCog, PauseCircle, PlayCircle,
+  CheckCircle2, RotateCcw, UserCog, PauseCircle, PlayCircle, SlidersHorizontal,
 } from 'lucide-react';
 import {
   getPermissionCatalog, getRoles, createRole, updateRole, deleteRole, getRbacUsers, updateRbacUser,
-  resetRbacUserPassword, deactivateRbacUser, reactivateRbacUser,
+  resetRbacUserPassword, deactivateRbacUser, reactivateRbacUser, setRbacUserPermissions,
 } from '../api/roles';
 import { ApiError } from '../api/client';
 import type { Role, RbacUser, PermissionModuleGroup } from '../data/rbacModel';
-import { validateDraftRole } from '../data/rbacModel';
+import { groupPermissionsByModule, validateDraftRole } from '../data/rbacModel';
 import { useAuth } from '../auth/AuthContext';
 
 interface RolesPermissionsPageProps {
@@ -355,6 +355,7 @@ const UsersTab: React.FC<{ roles: Role[]; users: RbacUser[]; onChanged: () => Pr
   const [resettingId, setResettingId] = useState<string | null>(null);
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const [passwordNotice, setPasswordNotice] = useState<{ title: string; fullName: string } | null>(null);
+  const [rightsFor, setRightsFor] = useState<RbacUser | null>(null);
 
   const roleNameById = useMemo(() => new Map(roles.map((r) => [r.id, r.name])), [roles]);
 
@@ -411,6 +412,15 @@ const UsersTab: React.FC<{ roles: Role[]; users: RbacUser[]; onChanged: () => Pr
         />
       )}
 
+      {rightsFor && (
+        <UserRightsPanel
+          user={rightsFor}
+          rolePermissions={roles.find((r) => r.id === rightsFor.roleId)?.permissions ?? []}
+          onClose={() => setRightsFor(null)}
+          onSaved={async () => { setRightsFor(null); await onChanged(); }}
+        />
+      )}
+
       <div className="p-3 rounded-xl bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800/50 text-xs text-blue-700 dark:text-blue-300 flex items-start gap-2">
         <UserCog size={14} className="shrink-0 mt-0.5" />
         <span>Les comptes se créent depuis la fiche employé (Gestion du personnel → Ajouter un employé → « Compte de connexion »). Cette page ne sert qu'à gérer les comptes existants.</span>
@@ -425,7 +435,8 @@ const UsersTab: React.FC<{ roles: Role[]; users: RbacUser[]; onChanged: () => Pr
               <th className="px-4 py-2.5 font-semibold">CIN / Email / Téléphone</th>
               <th className="px-4 py-2.5 font-semibold">Rôle</th>
               <th className="px-4 py-2.5 font-semibold">Statut</th>
-              <th className="px-4 py-2.5 font-semibold w-24"></th>
+              <th className="px-4 py-2.5 font-semibold">Dernière connexion</th>
+              <th className="px-4 py-2.5 font-semibold w-28"></th>
             </tr>
           </thead>
           <tbody>
@@ -473,7 +484,20 @@ const UsersTab: React.FC<{ roles: Role[]; users: RbacUser[]; onChanged: () => Pr
                       {u.isActive ? 'Actif' : 'Désactivé'}
                     </span>
                   </td>
+                  <td className="px-4 py-2.5 text-gray-500 dark:text-gray-400 whitespace-nowrap">
+                    {u.lastLoginAt ? new Date(u.lastLoginAt).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short', timeZone: 'Africa/Tunis' }) : 'Jamais'}
+                  </td>
                   <td className="px-4 py-2.5 text-right whitespace-nowrap">
+                    {!u.isSuperAdmin && u.id !== currentUser?.id && (
+                      <button
+                        onClick={() => setRightsFor(u)}
+                        title="Droits personnels (en plus du rôle)"
+                        className="relative p-1.5 rounded-lg text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 cursor-pointer"
+                      >
+                        <SlidersHorizontal size={13} />
+                        {u.extraPermissions.length > 0 && <span className="absolute -top-0.5 -right-0.5 min-w-[14px] h-[14px] rounded-full bg-emerald-600 text-white text-[9px] font-bold flex items-center justify-center">{u.extraPermissions.length}</span>}
+                      </button>
+                    )}
                     <button
                       onClick={() => handleResetPassword(u)}
                       disabled={resettingId === u.id || !modifiable}
@@ -503,6 +527,79 @@ const UsersTab: React.FC<{ roles: Role[]; users: RbacUser[]; onChanged: () => Pr
           </tbody>
         </table>
       </div>
+    </div>
+  );
+};
+
+// "If granted" rights of the rights matrix: the Direction turns them on for one person, on top of
+// what their role gives. Rights from the role are shown ticked and locked (change the role instead).
+const UserRightsPanel: React.FC<{ user: RbacUser; rolePermissions: string[]; onClose: () => void; onSaved: () => Promise<void> }> = ({ user, rolePermissions, onClose, onSaved }) => {
+  const fromRole = useMemo(() => new Set(rolePermissions), [rolePermissions]);
+  const [selected, setSelected] = useState<Set<string>>(() => new Set(user.extraPermissions));
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const groups = useMemo(() => groupPermissionsByModule(), []);
+  const toggle = (key: string) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  const save = async () => {
+    setSaving(true);
+    setError(null);
+    try {
+      await setRbacUserPermissions(user.id, [...selected].filter((k) => !fromRole.has(k)));
+      await onSaved();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Une erreur est survenue.');
+      setSaving(false);
+    }
+  };
+  return (
+    <div className="fixed inset-0 z-50 flex justify-end bg-black/30" onClick={onClose}>
+      <aside role="dialog" aria-label={`Droits de ${user.fullName}`} className="w-full max-w-lg h-full flex flex-col bg-white dark:bg-[#151D2A] shadow-xl" onClick={(e) => e.stopPropagation()}>
+        <div className="p-4 border-b border-gray-100 dark:border-gray-800 flex items-start justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-bold text-gray-900 dark:text-gray-100">Droits de {user.fullName}</h2>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Rôle : {user.roleName ?? '—'}. Cochez les droits à accorder en plus, à cette personne seulement. Chaque changement est inscrit au journal.</p>
+          </div>
+          <button onClick={onClose} aria-label="Fermer" className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800"><X size={16} /></button>
+        </div>
+        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+          {groups.map((g) => (
+            <section key={g.module}>
+              <h3 className="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1.5">{g.moduleLabel}</h3>
+              <ul className="space-y-1">
+                {g.permissions.map((p) => {
+                  const locked = fromRole.has(p.key);
+                  return (
+                    <li key={p.key}>
+                      <label className={`flex items-start gap-2 p-2 rounded-lg text-xs ${locked ? 'opacity-60' : 'hover:bg-gray-50 dark:hover:bg-gray-800/60 cursor-pointer'}`}>
+                        <input type="checkbox" className="mt-0.5" checked={locked || selected.has(p.key)} disabled={locked} onChange={() => toggle(p.key)} />
+                        <span>
+                          <span className="font-semibold text-gray-800 dark:text-gray-200">{p.label}</span>
+                          {p.sensitive && <span className="ml-1.5 px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-950/50 text-amber-700 dark:text-amber-300 text-[9px] font-semibold">sensible</span>}
+                          {locked && <span className="ml-1.5 text-[10px] text-gray-500">via le rôle</span>}
+                          <span className="block text-gray-500 dark:text-gray-400">{p.description}</span>
+                        </span>
+                      </label>
+                    </li>
+                  );
+                })}
+              </ul>
+            </section>
+          ))}
+        </div>
+        <div className="p-4 border-t border-gray-100 dark:border-gray-800 space-y-2">
+          {error && <p className="text-xs text-rose-600">{error}</p>}
+          <div className="flex justify-end gap-2">
+            <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs font-semibold text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800">Annuler</button>
+            <button onClick={() => void save()} disabled={saving} className={primaryButtonClass}>{saving ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />} Enregistrer</button>
+          </div>
+        </div>
+      </aside>
     </div>
   );
 };

@@ -6,8 +6,9 @@ import { asyncHandler, ApiError, notFound } from '../middleware/errors.js';
 import { requireAuth, requirePermission, requireAnyPermission } from '../middleware/auth.js';
 import { recordActivity } from '../lib/activity.js';
 import { hashPassword } from '../lib/password.js';
-import { groupPermissionsByModule, isKnownPermissionKey, MANAGE_ROLES_PERMISSION } from '../../src/data/rbacModel.js';
+import { groupPermissionsByModule, isKnownPermissionKey, MANAGE_ROLES_PERMISSION, PERMISSIONS } from '../../src/data/rbacModel.js';
 import { assertCanModifySuperAdminTarget } from '../lib/userGuards.js';
+import { userGrants } from '../lib/permissions.js';
 
 export const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE_PATTERN = /^(\+216)?\d{8}$/;
@@ -199,6 +200,7 @@ interface UserRow {
   employee_name: string | null;
   is_active: number;
   created_at: string;
+  last_login_at: string | null;
 }
 
 // Users are now created exclusively from the employee form's optional "Compte de connexion"
@@ -208,7 +210,8 @@ const listUsersWithRole = () =>
   (db
     .prepare(
       `SELECT u.id, u.full_name, u.cin, u.email, u.phone, u.role_id, r.name AS role_name, r.is_system AS role_is_system, u.must_change_password,
-              u.employee_id, (e.first_name || ' ' || e.last_name) AS employee_name, u.is_active, u.created_at
+              u.employee_id, (e.first_name || ' ' || e.last_name) AS employee_name, u.is_active, u.created_at,
+              (SELECT MAX(created_at) FROM sessions s WHERE s.user_id = u.id) AS last_login_at
        FROM users u LEFT JOIN roles r ON r.id = u.role_id LEFT JOIN employees e ON e.id = u.employee_id
        ORDER BY u.created_at ASC`
     )
@@ -227,6 +230,8 @@ const listUsersWithRole = () =>
       employeeName: u.employee_name,
       isActive: u.is_active === 1,
       createdAt: u.created_at,
+      lastLoginAt: u.last_login_at,
+      extraPermissions: userGrants(u.id),
     }));
 
 rolesRouter.get(
@@ -367,6 +372,40 @@ rolesRouter.post(
     db.prepare('UPDATE users SET is_active = 1 WHERE id = ?').run(existing.id);
 
     recordActivity('Rôles & permissions', 'Modification', `Utilisateur réactivé — ${existing.full_name}.`, req.user!.fullName);
+    const [updated] = listUsersWithRole().filter((u) => u.id === existing.id);
+    res.json(updated);
+  })
+);
+
+// Rights granted to one person on top of their profile ("if granted"). Replaces the person's whole
+// set; the activity log keeps what was added and removed, and by whom. Takes effect on the person's
+// next request (permissions are read per request).
+rolesRouter.put(
+  '/users/:id/permissions',
+  requirePermission(MANAGE_ROLES_PERMISSION),
+  asyncHandler((req, res) => {
+    const { permissions } = z.object({ permissions: permissionsArraySchema }).parse(req.body);
+    const existing = db.prepare('SELECT id, full_name FROM users WHERE id = ?').get(req.params.id) as { id: string; full_name: string } | undefined;
+    if (!existing) throw notFound('Utilisateur');
+    assertCanModifySuperAdminTarget(req.user!, existing.id);
+    if (existing.id === req.user!.id) throw new ApiError(400, 'Vous ne pouvez pas modifier vos propres droits.');
+
+    const before = new Set(userGrants(existing.id));
+    const after = new Set(permissions);
+    const added = [...after].filter((k) => !before.has(k));
+    const removed = [...before].filter((k) => !after.has(k));
+    if (added.length || removed.length) {
+      const now = new Date().toISOString();
+      const label = (k: string) => PERMISSIONS.find((p) => p.key === k)?.label ?? k;
+      const parts = [added.length ? `ajoutés : ${added.map(label).join(', ')}` : '', removed.length ? `retirés : ${removed.map(label).join(', ')}` : ''].filter(Boolean);
+      db.transaction(() => {
+        removed.forEach((k) => db.prepare('DELETE FROM user_permissions WHERE user_id = ? AND permission_key = ?').run(existing.id, k));
+        added.forEach((k) => db.prepare('INSERT INTO user_permissions (user_id, permission_key, granted_by, granted_at) VALUES (?, ?, ?, ?)').run(existing.id, k, req.user!.fullName, now));
+        recordActivity('Rôles & permissions', 'Modification', `Droits personnels de ${existing.full_name} — ${parts.join(' ; ')}.`, req.user!.fullName, {
+          userId: req.user!.id, entityType: 'user', entityId: existing.id, before: [...before].sort(), after: [...after].sort(),
+        });
+      })();
+    }
     const [updated] = listUsersWithRole().filter((u) => u.id === existing.id);
     res.json(updated);
   })

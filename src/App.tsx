@@ -969,6 +969,10 @@ export default function App() {
                 setActiveTab(tab);
                 if (tab !== 'sales') setActiveSubItem('');
               }}
+              onOpenPos={(subId) => {
+                setActiveTab('pos');
+                setActiveSubItem(subId);
+              }}
             />
 
             {/* Page Content Body — the only scrolling region, so the frame stays pinned.
