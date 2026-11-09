@@ -465,3 +465,16 @@ CREATE TABLE IF NOT EXISTS user_permissions (
   granted_at TEXT NOT NULL,
   PRIMARY KEY (user_id, permission_key)
 );
+
+-- History of the operating rules (src/data/businessRules.ts): old and new value, who, when, why.
+CREATE TABLE IF NOT EXISTS rule_changes (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  rule_key TEXT NOT NULL,
+  old_value TEXT,
+  new_value TEXT NOT NULL,
+  changed_by TEXT NOT NULL,
+  changed_by_id TEXT NOT NULL,
+  changed_at TEXT NOT NULL,
+  reason TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_rule_changes_key ON rule_changes(rule_key, changed_at);

@@ -41,9 +41,8 @@ const COLUMNS: { status: PrepStatus; title: string; next: PrepStatus; previous: 
   { status: 'ready', title: 'Prête', next: 'served', previous: 'in_progress', action: 'Servie' },
 ];
 
-// Without a target time for the product: orange after 10 min, red after 20.
-const DEFAULT_WARN = 10;
-const DEFAULT_LATE = 20;
+// Without a target time for the product: the station's rule (Paramètres → règles), orange at half.
+const DEFAULT_LATE = { kitchen: 20, bar: 10 };
 
 const PREFS_KEY = 'cn_kds_prefs';
 const readPrefs = (): { dark: boolean; scale: number; sound: boolean } => {
@@ -80,12 +79,12 @@ const columnOf = (t: BoardTicket): PrepStatus => {
 };
 
 // Lateness against each product's own target time (the slowest line decides).
-const lateness = (t: BoardTicket, now: number): 'ok' | 'warn' | 'late' => {
+const lateness = (t: BoardTicket, now: number, defaultLate: number): 'ok' | 'warn' | 'late' => {
   const minutes = (now - Date.parse(t.sentAt)) / 60_000;
   let level: 'ok' | 'warn' | 'late' = 'ok';
   t.lines.forEach((l) => {
-    const late = l.targetMinutes ?? DEFAULT_LATE;
-    const warn = l.targetMinutes ? l.targetMinutes * 0.75 : DEFAULT_WARN;
+    const late = l.targetMinutes ?? defaultLate;
+    const warn = l.targetMinutes ? l.targetMinutes * 0.75 : defaultLate / 2;
     if (minutes >= late) level = 'late';
     else if (minutes >= warn && level === 'ok') level = 'warn';
   });
@@ -94,6 +93,8 @@ const lateness = (t: BoardTicket, now: number): 'ok' | 'warn' | 'late' => {
 
 const PrepBoardScreen: React.FC<{ destination: 'kitchen' | 'bar' }> = ({ destination }) => {
   const board = useLoader(() => apiGet<{ tickets: BoardTicket[] }>(`/pos/prep/${destination}`), [destination]);
+  const rules = useLoader(() => apiGet<Record<string, number | boolean>>('/pos/rules/values'), []);
+  const defaultLate = Number(rules.data?.[destination === 'kitchen' ? 'prep_late_kitchen' : 'prep_late_bar'] ?? DEFAULT_LATE[destination]);
   const [prefs, setPrefsState] = useState(readPrefs);
   const [combined, setCombined] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
@@ -239,7 +240,7 @@ const PrepBoardScreen: React.FC<{ destination: 'kitchen' | 'bar' }> = ({ destina
               </h2>
               {list.length === 0 && <Empty>—</Empty>}
               {list.map((t) => {
-                const late = col.status === 'ready' ? 'ok' : lateness(t, now);
+                const late = col.status === 'ready' ? 'ok' : lateness(t, now, defaultLate);
                 const allergy = t.lines.some((l) => l.allergyNote || l.allergens.length > 0);
                 return (
                   <article
@@ -276,7 +277,7 @@ const PrepBoardScreen: React.FC<{ destination: 'kitchen' | 'bar' }> = ({ destina
                             >
                               <strong className="text-lg">{l.quantity} ×</strong> {l.name}
                               {l.extras.length > 0 && <span className="block text-sm opacity-80">+ {l.extras.join(', ')}</span>}
-                              {l.instruction && <span className={cx('block text-sm font-bold', l.allergyNote ? 'text-red-500' : 'text-orange-500')}>⚠ {l.instruction}</span>}
+                              {l.instruction && <span className={cx('flex items-start gap-1 text-sm font-bold', l.allergyNote ? 'text-red-500' : 'text-orange-500')}><AlertTriangle size={14} className="shrink-0 mt-0.5" /> {l.instruction}</span>}
                               {l.allergens.length > 0 && <span className="block text-xs text-red-500">Contient : {l.allergens.join(', ')}</span>}
                               {l.cancellationRequested && <span className="block"><Badge tone="red">ANNULATION DEMANDÉE</Badge></span>}
                             </button>

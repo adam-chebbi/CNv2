@@ -193,6 +193,9 @@ export const TablePage: React.FC<{ token: string; me: Me | null }> = ({ token, m
       {tab === 'cart' && (
         <section className="rounded-2xl bg-white border border-gray-200 p-4 space-y-3">
           <h2 className="font-semibold">Ma commande</h2>
+          {table.data.features?.ordering === false && (
+            <p className="text-sm rounded-xl bg-amber-50 border border-amber-200 text-amber-900 p-3">La commande par téléphone est fermée pour le moment. Appelez un serveur, il prendra votre commande.</p>
+          )}
           <CartLines catalog={m} lines={lines} onChange={setLines} />
           {preview && (
             <div className="border-t border-gray-100 pt-2 text-sm space-y-1">
@@ -250,9 +253,13 @@ export const TablePage: React.FC<{ token: string; me: Me | null }> = ({ token, m
                   {visit.bill.pendingLines.map((l, i) => <p key={i}>{l.quantity} × {l.displayName}</p>)}
                 </div>
               )}
-              <Btn variant="primary" className="w-full" busy={busy} disabled={requested('bill')} onClick={() => run(async () => { await clientApi.request(token, 'bill'); setVisit(await clientApi.visit(token)); })}>
-                <Receipt size={16} /> {requested('bill') ? "L'équipe arrive pour le règlement" : 'Je souhaite régler'}
-              </Btn>
+              {table.data.features?.bill !== false ? (
+                <Btn variant="primary" className="w-full" busy={busy} disabled={requested('bill')} onClick={() => run(async () => { await clientApi.request(token, 'bill'); setVisit(await clientApi.visit(token)); })}>
+                  <Receipt size={16} /> {requested('bill') ? "L'équipe arrive pour le règlement" : 'Je souhaite régler'}
+                </Btn>
+              ) : (
+                <p className="text-sm text-gray-600">Pour régler, appelez un serveur avec le bouton ci-dessous.</p>
+              )}
               <p className="text-xs text-gray-500">Le règlement se fait auprès de l'équipe (espèces, carte, ticket restaurant). Aucun paiement en ligne.</p>
             </>
           )}
@@ -263,7 +270,7 @@ export const TablePage: React.FC<{ token: string; me: Me | null }> = ({ token, m
         <section className="space-y-3">
           <div className="rounded-2xl bg-white border border-gray-200 p-4 space-y-3">
             <h2 className="font-semibold flex items-center gap-2"><Star size={16} /> Votre avis</h2>
-            {reviewSent ? <p className="text-sm text-emerald-700">Merci pour votre retour !</p> : (
+            {table.data.features?.feedback === false ? null : reviewSent ? <p className="text-sm text-emerald-700">Merci pour votre retour !</p> : (
               <>
                 <div className="flex gap-1" role="radiogroup" aria-label="Note">
                   {[1, 2, 3, 4, 5].map((n) => (

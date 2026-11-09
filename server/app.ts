@@ -35,6 +35,7 @@ import { insightsRouter } from './routes/insights.js';
 import { prepRouter } from './routes/prep.js';
 import { clientRouter } from './routes/client.js';
 import { serviceDeskRouter } from './routes/serviceDesk.js';
+import { rulesRouter } from './routes/rules.js';
 import { cancellationsRouter } from './routes/cancellations.js';
 import { customerAccountRouter } from './routes/customerAccount.js';
 import { customersRouter } from './routes/customers.js';
@@ -134,6 +135,7 @@ export const createApp = (): express.Express => {
   app.use('/api/pos', floorDesignRouter);
   app.use('/api/pos', splitsRouter);
   app.use('/api/pos', insightsRouter);
+  app.use('/api/pos', rulesRouter);
   app.use('/api/pos', prepRouter);
   app.use('/api/pos', serviceDeskRouter);
   app.use('/api/pos', cancellationsRouter);

@@ -18,6 +18,7 @@ import {
   type OrderRow,
 } from '../lib/posService.js';
 import { cartLineSchema, readPosSettings } from './posCatalog.js';
+import { rule } from '../lib/rules.js';
 import { createServiceRequest } from '../lib/serviceRequests.js';
 import { fromJson } from '../db/json.js';
 import type { AppliedDiscount } from '../../src/data/pricing.js';
@@ -115,8 +116,23 @@ clientRouter.get('/tables/:qrToken', asyncHandler((req, res) => {
     visitOpen: Boolean(visit),
     joined: Boolean(joinedDevice(req, table)),
     googleReviewUrl: settings.googleReviewUrl || null,
+    features: { ordering: rule<boolean>('qr_ordering'), bill: rule<boolean>('qr_bill'), feedback: rule<boolean>('qr_feedback') },
   });
 }));
+
+// Operating rules on phone orders (configuration engine): switch, follow-up orders, pending limit.
+const assertQrOrderAllowed = (visitId: string): void => {
+  if (!rule<boolean>('qr_ordering')) throw new ApiError(403, 'La commande par téléphone est fermée pour le moment. Appelez un serveur.');
+  const counts = db
+    .prepare(
+      `SELECT SUM(CASE WHEN status IN ('pending_validation', 'awaiting_customer') THEN 1 ELSE 0 END) AS pending,
+              SUM(CASE WHEN status IN ('pending_validation', 'awaiting_customer', 'validated') THEN 1 ELSE 0 END) AS sent
+       FROM pos_orders WHERE visit_id = ? AND channel = 'qr'`
+    )
+    .get(visitId) as { pending: number | null; sent: number | null };
+  if (!rule<boolean>('qr_add_after_order') && (counts.sent ?? 0) > 0) throw new ApiError(409, 'Pour ajouter des articles, appelez un serveur.');
+  if ((counts.pending ?? 0) >= rule<number>('qr_max_pending')) throw new ApiError(429, 'Veuillez patienter, l’équipe arrive pour vos commandes en attente.');
+};
 
 clientRouter.post('/tables/:qrToken/join', rateLimit('visit-join', 20, 10 * 60_000), asyncHandler((req, res) => {
   const { code } = z.object({ code: z.string().trim().min(1).max(10) }).parse(req.body);
@@ -196,6 +212,7 @@ clientRouter.post('/tables/:qrToken/orders', rateLimit('qr-order', 30, 10 * 60_0
   const body = clientOrderSchema.parse(req.body);
   const table = tableByToken(req.params.qrToken);
   const device = requireJoined(req, table);
+  assertQrOrderAllowed(device.visitId);
   let created = false;
   runIdempotent(req, res, `qr-order:${device.deviceId}`, () => {
     const cart = priceCart(body.lines);
@@ -237,6 +254,8 @@ clientRouter.post('/tables/:qrToken/orders/:orderId/confirm', asyncHandler((req,
 
 clientRouter.post('/tables/:qrToken/requests', rateLimit('service-request', 30, 10 * 60_000), asyncHandler((req, res) => {
   const { type } = z.object({ type: z.enum(['call_waiter', 'bill']) }).parse(req.body);
+  // Calling a waiter is never switched off: a person stays one tap away.
+  if (type === 'bill' && !rule<boolean>('qr_bill')) throw new ApiError(403, 'Pour régler, demandez à un serveur.');
   const table = tableByToken(req.params.qrToken);
   const device = requireJoined(req, table);
   const request = db.transaction(() => createServiceRequest(device.visitId, table.id, type))();
@@ -254,6 +273,7 @@ const feedbackSchema = z.object({
 // Internal review, available whatever the rating — the Google link is shown next to it (§10.4).
 clientRouter.post('/feedback', rateLimit('feedback', 5, 60 * 60_000), asyncHandler((req, res) => {
   const body = feedbackSchema.parse(req.body);
+  if (body.qrToken && !rule<boolean>('qr_feedback')) throw new ApiError(403, 'Les avis ne sont pas ouverts pour le moment.');
   let visitId: string | null = null;
   let tableName: string | null = null;
   if (body.qrToken) {

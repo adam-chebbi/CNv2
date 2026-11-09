@@ -51,7 +51,7 @@ export interface Me {
 export const clientApi = {
   menu: () => apiGet<ClientMenu>('/client/menu'),
   faq: () => apiGet<{ id: string; question: string; answer: string; articleId: string | null }[]>('/client/faq'),
-  table: (token: string) => apiGet<{ table: { name: string }; visitOpen: boolean; joined: boolean; googleReviewUrl: string | null }>(`/client/tables/${token}`),
+  table: (token: string) => apiGet<{ table: { name: string }; visitOpen: boolean; joined: boolean; googleReviewUrl: string | null; features?: { ordering: boolean; bill: boolean; feedback: boolean } }>(`/client/tables/${token}`),
   join: (token: string, code: string) => apiPost<{ joined: boolean }>(`/client/tables/${token}/join`, { code }),
   visit: (token: string) => apiGet<VisitView>(`/client/tables/${token}/visit`),
   order: (token: string, lines: CartLineInput[], key: string) => apiPostOnce<ClientOrder>(`/client/tables/${token}/orders`, { lines }, key),

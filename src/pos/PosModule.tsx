@@ -50,6 +50,7 @@ export const POS_ADMIN_PAGES: PosPageDef[] = [
   { id: 'pos_printers', label: 'Imprimantes & tiroir', permission: 'pos:settings', component: page(() => import('./PrintersPage'), 'PrintersPage') },
   { id: 'pos_recette', label: 'Recette', permission: 'pos:settings', component: page(() => import('./RecettePage'), 'RecettePage') },
   { id: 'pos_settings', label: 'Paramètres caisse', permission: 'pos:settings', component: page(() => import('./PosSettingsPage'), 'PosSettingsPage') },
+  { id: 'pos_rules', label: 'Règles de fonctionnement', permission: 'rules:service', component: page(() => import('./RulesPage'), 'RulesPage') },
 ];
 
 export const PosModule: React.FC<{ subId: string }> = ({ subId }) => {

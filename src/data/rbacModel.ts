@@ -151,6 +151,7 @@ export const PERMISSIONS: PermissionDef[] = [
   { key: 'tables:all', module: 'floor', moduleLabel: 'Salle & tables', label: 'Toutes les tables', description: 'Agir sur toutes les tables (sans cette permission : uniquement les tables de ses carrés).' },
   { key: 'tables:assign', module: 'floor', moduleLabel: 'Salle & tables', label: 'Carrés & affectations', description: 'Définir les carrés et y affecter les serveurs, y compris pendant le service.' },
   { key: 'insights:view', module: 'dashboard', moduleLabel: 'Tableau de bord', label: 'Pilotage', description: 'Prévisions de ventes, suggestions de commande, ingénierie de menu et alertes.' },
+  { key: 'rules:service', module: 'floor', moduleLabel: 'Salle & tables', label: 'Règles du service', description: 'Modifier les règles de service ouvertes au gérant (commandes QR : activation, ajouts, demandes en attente, addition, avis).' },
   { key: 'tables:transfer', module: 'floor', moduleLabel: 'Salle & tables', label: 'Transférer / fusionner des tables', description: 'Déplacer une table occupée vers une autre table libre, ou fusionner deux tables en une seule addition.' },
   { key: 'floor:assets', module: 'floor', moduleLabel: 'Salle & tables', label: 'Bibliothèque 3D', description: 'Ajouter des textures, modèles 3D et images de fond à la bibliothèque du plan de salle.' },
   { key: 'visits:manage', module: 'floor', moduleLabel: 'Salle & tables', label: 'Ouvrir / libérer une table', description: 'Ouvrir une visite (code client), saisir les couverts, libérer la table.' },
@@ -332,6 +333,14 @@ export const PROFILE_GRANT_WAVES: { flag: string; grants: Record<string, string[
       [SERVEUR_ROLE_NAME]: ['timeclock:self', 'stats:self'],
       [CUISINE_ROLE_NAME]: ['timeclock:self'],
       [BAR_ROLE_NAME]: ['timeclock:self'],
+    },
+  },
+  {
+    // Limited list of operating rules the Gérant may change during service.
+    flag: 'rbac_wave_service_rules',
+    grants: {
+      [DIRECTION_ROLE_NAME]: ['rules:service'],
+      [GERANT_ROLE_NAME]: ['rules:service'],
     },
   },
   {
