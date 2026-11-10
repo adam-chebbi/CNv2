@@ -240,7 +240,25 @@ export const readPosSettings = (): PosSettings => ({
   closingTime: getPosSetting('closing_time', POS_SETTING_DEFAULTS.closingTime),
   publicAppUrl: getPosSetting('public_app_url', POS_SETTING_DEFAULTS.publicAppUrl),
   idleLogoutMinutes: Number(getPosSetting('idle_logout_minutes', String(POS_SETTING_DEFAULTS.idleLogoutMinutes))),
+  legalName: getPosSetting('legal_name', POS_SETTING_DEFAULTS.legalName),
+  address: getPosSetting('legal_address', POS_SETTING_DEFAULTS.address),
+  phone: getPosSetting('legal_phone', POS_SETTING_DEFAULTS.phone),
+  website: getPosSetting('legal_website', POS_SETTING_DEFAULTS.website),
+  taxId: getPosSetting('legal_tax_id', POS_SETTING_DEFAULTS.taxId),
+  tradeRegister: getPosSetting('legal_trade_register', POS_SETTING_DEFAULTS.tradeRegister),
+  receiptThanks: getPosSetting('receipt_thanks', POS_SETTING_DEFAULTS.receiptThanks),
+  openingHoursText: getPosSetting('opening_hours_text', POS_SETTING_DEFAULTS.openingHoursText),
+  autoPrintReceipt: getPosSetting('auto_print_receipt', POS_SETTING_DEFAULTS.autoPrintReceipt ? '1' : '0') === '1',
+  releaseTableAfterPayment: getPosSetting('release_table_after_payment', POS_SETTING_DEFAULTS.releaseTableAfterPayment ? '1' : '0') === '1',
+  returnToPlanAfterSend: getPosSetting('return_to_plan_after_send', POS_SETTING_DEFAULTS.returnToPlanAfterSend ? '1' : '0') === '1',
+  counterNextSaleSeconds: Number(getPosSetting('counter_next_sale_seconds', String(POS_SETTING_DEFAULTS.counterNextSaleSeconds))),
 });
+
+/** Identity printed on customer documents. */
+export const receiptIdentity = () => {
+  const s = readPosSettings();
+  return { name: s.legalName, address: s.address, phone: s.phone, website: s.website, taxId: s.taxId, tradeRegister: s.tradeRegister, thanks: s.receiptThanks, openingHours: s.openingHoursText };
+};
 
 const settingsSchema = z.object({
   manualDiscountMaxPercent: z.number().int().min(0).max(100),
@@ -252,6 +270,18 @@ const settingsSchema = z.object({
   closingTime: time,
   publicAppUrl: z.union([z.literal(''), z.string().url().max(200)]),
   idleLogoutMinutes: z.number().int().min(0).max(720).default(0),
+  legalName: z.string().trim().min(1).max(80).default(POS_SETTING_DEFAULTS.legalName),
+  address: z.string().trim().max(160).default(''),
+  phone: z.union([z.literal(''), z.string().trim().regex(/^\+?[0-9 ]{8,16}$/, 'Téléphone : chiffres uniquement, ex. +216 71 000 000')]).default(''),
+  website: z.string().trim().max(80).default(''),
+  taxId: z.string().trim().max(40).default(''),
+  tradeRegister: z.string().trim().max(40).default(''),
+  receiptThanks: z.string().trim().max(80).default(POS_SETTING_DEFAULTS.receiptThanks),
+  openingHoursText: z.string().trim().max(120).default(''),
+  autoPrintReceipt: z.boolean().default(false),
+  releaseTableAfterPayment: z.boolean().default(false),
+  returnToPlanAfterSend: z.boolean().default(true),
+  counterNextSaleSeconds: z.number().int().min(0).max(30).default(4),
 });
 
 posCatalogRouter.get('/settings', requireAnyPermission('pos:settings', 'pos:sell', 'orders:take', 'reservations:view'), asyncHandler((_req, res) => {
@@ -272,6 +302,18 @@ posCatalogRouter.put('/settings', requirePermission('pos:settings'), asyncHandle
     setPosSetting('closing_time', body.closingTime, user.fullName);
     setPosSetting('public_app_url', body.publicAppUrl.replace(/\/$/, ''), user.fullName);
     setPosSetting('idle_logout_minutes', String(body.idleLogoutMinutes), user.fullName);
+    setPosSetting('legal_name', body.legalName, user.fullName);
+    setPosSetting('legal_address', body.address, user.fullName);
+    setPosSetting('legal_phone', body.phone, user.fullName);
+    setPosSetting('legal_website', body.website, user.fullName);
+    setPosSetting('legal_tax_id', body.taxId, user.fullName);
+    setPosSetting('legal_trade_register', body.tradeRegister, user.fullName);
+    setPosSetting('receipt_thanks', body.receiptThanks, user.fullName);
+    setPosSetting('opening_hours_text', body.openingHoursText, user.fullName);
+    setPosSetting('auto_print_receipt', body.autoPrintReceipt ? '1' : '0', user.fullName);
+    setPosSetting('release_table_after_payment', body.releaseTableAfterPayment ? '1' : '0', user.fullName);
+    setPosSetting('return_to_plan_after_send', body.returnToPlanAfterSend ? '1' : '0', user.fullName);
+    setPosSetting('counter_next_sale_seconds', String(body.counterNextSaleSeconds), user.fullName);
     recordActivity('Caisse', 'Paramètres', 'Paramètres de la caisse modifiés', user.fullName, { userId: user.id, before, after: body });
   })();
   res.json(readPosSettings());

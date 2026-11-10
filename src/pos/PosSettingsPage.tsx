@@ -44,6 +44,35 @@ export const PosSettingsPage: React.FC = () => {
           </Field>
         </div>
       </Card>
+      <Card title="Identité du café (imprimée sur les tickets)">
+        <p className="text-xs text-gray-500">En-tête et pied des tickets, additions et parts. Aucun mot de passe Wi-Fi n’est imprimé.</p>
+        <div className="grid sm:grid-cols-2 gap-3">
+          <Field label="Nom"><input className={inputCls} value={s.legalName} maxLength={80} onChange={(e) => set({ legalName: e.target.value })} /></Field>
+          <Field label="Adresse"><input className={inputCls} value={s.address} maxLength={160} onChange={(e) => set({ address: e.target.value })} placeholder="Rue…, Menzah 9, 1013 Tunis" /></Field>
+          <Field label="Téléphone"><input className={inputCls} value={s.phone} inputMode="tel" onChange={(e) => set({ phone: e.target.value })} placeholder="+216 71 000 000" /></Field>
+          <Field label="Site web"><input className={inputCls} value={s.website} maxLength={80} onChange={(e) => set({ website: e.target.value.trim() })} placeholder="cafenoir.tn" /></Field>
+          <Field label="Matricule fiscal"><input className={inputCls} value={s.taxId} maxLength={40} onChange={(e) => set({ taxId: e.target.value })} /></Field>
+          <Field label="Registre de commerce"><input className={inputCls} value={s.tradeRegister} maxLength={40} onChange={(e) => set({ tradeRegister: e.target.value })} /></Field>
+          <Field label="Message de remerciement"><input className={inputCls} value={s.receiptThanks} maxLength={80} onChange={(e) => set({ receiptThanks: e.target.value })} /></Field>
+          <Field label="Horaires (bas du ticket)"><input className={inputCls} value={s.openingHoursText} maxLength={120} onChange={(e) => set({ openingHoursText: e.target.value })} placeholder="Tous les jours 7 h – 23 h" /></Field>
+        </div>
+      </Card>
+      <Card title="Comportement de la caisse">
+        <div className="space-y-2">
+          {([
+            ['autoPrintReceipt', 'Imprimer le ticket automatiquement dès que la vente est réglée'],
+            ['releaseTableAfterPayment', 'Libérer la table automatiquement quand l’addition est entièrement réglée'],
+            ['returnToPlanAfterSend', 'Revenir au plan de salle après « Envoyer en préparation »'],
+          ] as const).map(([key, label]) => (
+            <label key={key} className="flex items-center gap-3 min-h-[44px] text-sm">
+              <input type="checkbox" className="w-5 h-5" checked={s[key]} onChange={(e) => set({ [key]: e.target.checked } as Partial<PosSettings>)} /> {label}
+            </label>
+          ))}
+          <Field label="Comptoir : nouvelle vente automatique après (secondes, 0 = jamais)">
+            <input className={inputCls} inputMode="numeric" value={s.counterNextSaleSeconds} onChange={(e) => set({ counterNextSaleSeconds: Math.min(30, Number(e.target.value.replace(/\D/g, '')) || 0) })} />
+          </Field>
+        </div>
+      </Card>
       <Card title="Clients & QR codes">
         <Field label="Adresse publique de l'application" hint="Imprimée dans les QR codes des tables, ex. https://system.cafenoir.tn. Laisser vide pour utiliser l'adresse actuelle.">
           <input className={inputCls} value={s.publicAppUrl} onChange={(e) => set({ publicAppUrl: e.target.value.trim() })} />

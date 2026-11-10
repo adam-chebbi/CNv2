@@ -1,6 +1,7 @@
 import QRCode from 'qrcode';
 import { billDocument, receiptDocument, renderHtml, type PrintDocument, type ReceiptSale } from '../data/receipts';
 import type { SaleDetail } from './api';
+import { apiGet } from '../api/client';
 
 // Browser printing (80 mm) of the shared document model — used when no printer is connected
 // through the print agent. Same content as the thermal printers (src/data/receipts.ts).
@@ -22,7 +23,14 @@ export const printDocument = async (doc: PrintDocument): Promise<void> => {
   document.body.appendChild(frame);
 };
 
-export const printTicket = (sale: SaleDetail, duplicateNumber = 0, reviewUrl?: string | null): Promise<void> =>
-  printDocument(receiptDocument(sale as unknown as ReceiptSale, duplicateNumber, reviewUrl));
+// The server builds customer documents (café identity from the settings); the local layout is
+// only a fallback when it can't be reached.
+export const printTicket = async (sale: SaleDetail, duplicateNumber = 0, reviewUrl?: string | null): Promise<void> => {
+  try {
+    await printDocument(await apiGet<PrintDocument>(`/pos/sales/${sale.id}/receipt-document?duplicate=${duplicateNumber}`));
+  } catch {
+    await printDocument(receiptDocument(sale as unknown as ReceiptSale, duplicateNumber, reviewUrl));
+  }
+};
 
-export const printBill = (sale: SaleDetail): Promise<void> => printDocument(billDocument(sale as unknown as ReceiptSale));
+export const printBill = (sale: SaleDetail, serverDocument?: PrintDocument): Promise<void> => printDocument(serverDocument ?? billDocument(sale as unknown as ReceiptSale));

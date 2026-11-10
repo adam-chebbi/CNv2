@@ -120,42 +120,88 @@ export interface ReceiptSale {
   payments: { kind: string; method: string; amountMil: number; tenderedMil: number | null; changeMil: number }[];
 }
 
-const header = (): ReceiptLine[] => [
-  { t: 'text', text: 'Café Noir', align: 'center', bold: true, size: 2 },
-  { t: 'text', text: 'Menzah 9 — Tunis', align: 'center' },
-];
+// The café's credentials printed on every customer document, from the settings (never in the
+// code). No Wi-Fi password is ever printed.
+export interface ReceiptIdentity {
+  name: string;
+  address: string;
+  phone: string;
+  website: string;
+  taxId: string; // matricule fiscal
+  tradeRegister: string; // registre de commerce
+  thanks: string;
+  openingHours: string;
+}
+export const DEFAULT_IDENTITY: ReceiptIdentity = { name: 'Café Noir', address: '', phone: '', website: '', taxId: '', tradeRegister: '', thanks: 'Merci et à bientôt !', openingHours: '' };
+let identityProvider: () => ReceiptIdentity = () => DEFAULT_IDENTITY;
+/** The server reads the settings; the browser passes what it loaded. */
+export const setReceiptIdentityProvider = (provider: () => ReceiptIdentity): void => {
+  identityProvider = provider;
+};
 
+const header = (): ReceiptLine[] => {
+  const id = identityProvider();
+  const contact = [id.phone && `Tél. ${id.phone}`, id.website].filter(Boolean).join(' · ');
+  const legal = [id.taxId && `MF ${id.taxId}`, id.tradeRegister && `RC ${id.tradeRegister}`].filter(Boolean).join(' · ');
+  return [
+    { t: 'text', text: (id.name || 'Café Noir').toUpperCase(), align: 'center', bold: true, size: 2 },
+    ...(id.address ? [{ t: 'text', text: id.address, align: 'center' } as ReceiptLine] : []),
+    ...(contact ? [{ t: 'text', text: contact, align: 'center' } as ReceiptLine] : []),
+    ...(legal ? [{ t: 'text', text: legal, align: 'center' } as ReceiptLine] : []),
+    { t: 'feed', lines: 1 },
+  ];
+};
+
+const footer = (reviewUrl?: string | null): ReceiptLine[] => {
+  const id = identityProvider();
+  const lines: ReceiptLine[] = [{ t: 'feed', lines: 1 }, { t: 'text', text: id.thanks || 'Merci et à bientôt !', align: 'center', bold: true }];
+  if (id.openingHours) lines.push({ t: 'text', text: id.openingHours, align: 'center' });
+  if (reviewUrl) lines.push({ t: 'feed', lines: 1 }, { t: 'qr', data: reviewUrl }, { t: 'text', text: `Votre avis compte${id.website ? ` · ${id.website}` : ''}`, align: 'center' });
+  return lines;
+};
+
+const activeLines = (sale: ReceiptSale) => sale.orders.filter((o) => o.status === 'validated').flatMap((o) => o.lines.filter((l) => l.status === 'active'));
+
+// Quantity in its own column, name, price on the right; discounts indented under their line.
 const itemLines = (sale: ReceiptSale): ReceiptLine[] =>
-  sale.orders
-    .filter((o) => o.status === 'validated')
-    .flatMap((o) => o.lines.filter((l) => l.status === 'active'))
-    .flatMap((l): ReceiptLine[] => [
-      { t: 'row', left: `${l.quantity} × ${l.displayName}`, right: money(l.grossMil) },
-      ...l.itemDiscounts.map((d): ReceiptLine => ({ t: 'row', left: `   ${d.label}`, right: `-${money(d.amountMil)}` })),
-    ]);
+  activeLines(sale).flatMap((l): ReceiptLine[] => [
+    { t: 'row', left: `${String(l.quantity).padStart(2, ' ')}  ${l.displayName}`, right: money(l.grossMil) },
+    ...l.itemDiscounts.map((d): ReceiptLine => ({ t: 'row', left: `      ${d.label}`, right: `-${money(d.amountMil)}` })),
+  ]);
 
-const context = (sale: ReceiptSale): ReceiptLine[] => {
-  const parts: ReceiptLine[] = [];
-  if (sale.tableName) parts.push({ t: 'text', text: `Table ${sale.tableName}`, align: 'center', bold: true });
-  if (sale.waiters.length) parts.push({ t: 'text', text: `Serveur : ${sale.waiters.join(', ')}`, align: 'center' });
-  parts.push({ t: 'text', text: sale.serviceType === 'takeaway' ? 'À emporter' : 'Sur place', align: 'center' });
-  if (sale.pickupNumber) parts.push({ t: 'text', text: `Votre numéro : ${sale.pickupNumber}`, align: 'center', bold: true, size: 2 });
+/** Ticket number and time on one row; table and waiter (or takeaway number) on the next. */
+const context = (sale: ReceiptSale, title: string, at: string): ReceiptLine[] => {
+  const parts: ReceiptLine[] = [{ t: 'row', left: title, right: tunisTime(at, true) }];
+  const where = sale.tableName ? `Table ${sale.tableName}` : sale.serviceType === 'takeaway' ? 'À emporter' : 'Sur place';
+  parts.push({ t: 'row', left: where, right: sale.waiters.length ? `Serveur ${sale.waiters.join(', ')}` : '' });
+  if (sale.pickupNumber) parts.push({ t: 'text', text: `RETRAIT N° ${sale.pickupNumber}`, align: 'center', bold: true, size: 2 });
   return parts;
 };
 
+/** Sub-total (when discounts apply), discounts, TOTAL in large type, VAT per rate. */
+const totals = (sale: ReceiptSale): ReceiptLine[] => {
+  const discounts = activeLines(sale).reduce((s, l) => s + l.itemDiscounts.reduce((t, d) => t + d.amountMil, 0), 0) + sale.ticketDiscounts.reduce((s, d) => s + d.amountMil, 0);
+  const lines: ReceiptLine[] = [];
+  if (discounts > 0) {
+    lines.push({ t: 'row', left: 'Sous-total', right: money(activeLines(sale).reduce((s, l) => s + l.grossMil, 0)) });
+    sale.ticketDiscounts.forEach((d) => lines.push({ t: 'row', left: d.label, right: `-${money(d.amountMil)}` }));
+  }
+  lines.push({ t: 'row', left: 'TOTAL', right: formatDt(sale.totalMil), bold: true, size: 2 });
+  sale.vat.forEach((v) => lines.push({ t: 'row', left: `  dont TVA ${Math.round(v.rate * 100)} %`, right: money(v.vatMil) }));
+  return lines;
+};
+
 export const receiptDocument = (sale: ReceiptSale, duplicateNumber = 0, reviewUrl?: string | null): PrintDocument => {
-  const lines: ReceiptLine[] = [...header()];
+  const lines: ReceiptLine[] = [];
   if (duplicateNumber > 0) lines.push({ t: 'text', text: `DUPLICATA n°${duplicateNumber}`, align: 'center', bold: true, invert: true });
   lines.push(
-    { t: 'text', text: `Ticket ${sale.ticketNumber ?? sale.offlineRef ?? '—'}`, align: 'center' },
-    { t: 'text', text: tunisTime(sale.completedAt ?? sale.createdAt, true), align: 'center' },
-    ...context(sale),
+    ...header(),
     { t: 'rule' },
+    ...context(sale, `Ticket ${sale.ticketNumber ?? sale.offlineRef ?? '—'}`, sale.completedAt ?? sale.createdAt),
+    { t: 'rule', char: '=' },
     ...itemLines(sale),
     { t: 'rule' },
-    ...sale.ticketDiscounts.map((d): ReceiptLine => ({ t: 'row', left: d.label, right: `-${money(d.amountMil)}` })),
-    { t: 'row', left: 'TOTAL', right: formatDt(sale.totalMil), bold: true, size: 2 },
-    ...sale.vat.map((v): ReceiptLine => ({ t: 'row', left: `dont TVA ${Math.round(v.rate * 100)} %`, right: money(v.vatMil) })),
+    ...totals(sale),
     { t: 'rule' }
   );
   sale.payments.forEach((p) => {
@@ -165,9 +211,7 @@ export const receiptDocument = (sale: ReceiptSale, duplicateNumber = 0, reviewUr
       if (p.changeMil) lines.push({ t: 'row', left: 'Monnaie rendue', right: money(p.changeMil) });
     }
   });
-  lines.push({ t: 'rule' }, { t: 'text', text: 'Merci de votre visite !', align: 'center' });
-  if (reviewUrl) lines.push({ t: 'text', text: 'Votre avis compte :', align: 'center' }, { t: 'qr', data: reviewUrl });
-  lines.push({ t: 'feed', lines: 2 });
+  lines.push(...footer(reviewUrl), { t: 'feed', lines: 2 });
   return { title: `Ticket ${sale.ticketNumber ?? ''}`, lines };
 };
 
@@ -184,13 +228,11 @@ export interface SplitPart {
 
 // One payer's receipt when the bill is split (amélioration 08): their items or their share.
 export const splitReceiptDocument = (sale: ReceiptSale, p: SplitPart): PrintDocument => {
-  const lines: ReceiptLine[] = [...header()];
+  const lines: ReceiptLine[] = [...header(), { t: 'rule' }];
   lines.push(
-    { t: 'text', text: `${sale.ticketNumber ? `Ticket ${sale.ticketNumber}` : 'Addition'} — part ${p.part}/${p.parts}`, align: 'center', bold: true },
-    ...(p.label ? [{ t: 'text', text: p.label, align: 'center' } as ReceiptLine] : []),
-    { t: 'text', text: tunisTime(new Date().toISOString(), true), align: 'center' },
-    ...context(sale),
-    { t: 'rule' }
+    ...context(sale, `${sale.ticketNumber ? `Ticket ${sale.ticketNumber}` : 'Addition'} · part ${p.part}/${p.parts}`, new Date().toISOString()),
+    ...(p.label ? [{ t: 'text', text: p.label, align: 'center', bold: true } as ReceiptLine] : []),
+    { t: 'rule', char: '=' }
   );
   if (p.lineIds) {
     const mine = new Set(p.lineIds);
@@ -202,7 +244,7 @@ export const splitReceiptDocument = (sale: ReceiptSale, p: SplitPart): PrintDocu
     if (pay.changeMil) lines.push({ t: 'row', left: 'Monnaie rendue', right: money(pay.changeMil) });
   });
   if (p.paidMil < p.amountMil) lines.push({ t: 'row', left: 'Reste à régler', right: money(p.amountMil - p.paidMil), bold: true });
-  lines.push({ t: 'rule' }, { t: 'text', text: 'Merci de votre visite !', align: 'center' }, { t: 'feed', lines: 2 });
+  lines.push({ t: 'rule' }, ...footer(), { t: 'feed', lines: 2 });
   return { title: `Part ${p.part}/${p.parts}`, lines };
 };
 
@@ -211,15 +253,14 @@ export const billDocument = (sale: ReceiptSale): PrintDocument => ({
   title: `Addition ${sale.tableName ?? ''}`,
   lines: [
     ...header(),
-    { t: 'text', text: 'ADDITION', align: 'center', bold: true, size: 2 },
+    { t: 'text', text: 'ADDITION', align: 'center', bold: true, size: 2, invert: true },
     { t: 'text', text: 'Non valable comme ticket de caisse', align: 'center' },
-    { t: 'text', text: tunisTime(new Date().toISOString(), true), align: 'center' },
-    ...context(sale),
     { t: 'rule' },
+    ...context(sale, 'Addition', new Date().toISOString()),
+    { t: 'rule', char: '=' },
     ...itemLines(sale),
     { t: 'rule' },
-    ...sale.ticketDiscounts.map((d): ReceiptLine => ({ t: 'row', left: d.label, right: `-${money(d.amountMil)}` })),
-    { t: 'row', left: 'TOTAL', right: formatDt(sale.totalMil), bold: true, size: 2 },
+    ...totals(sale),
     ...(sale.paidMil > 0
       ? ([
           { t: 'row', left: 'Déjà réglé', right: money(sale.paidMil) },
@@ -265,17 +306,17 @@ export const renderHtml = (doc: PrintDocument, qrImages: Record<string, string> 
         case 'qr':
           return qrImages[l.data] ? `<p class="center"><img src="${qrImages[l.data]}" alt="" width="110" height="110"></p>` : '';
         case 'feed':
-          return '';
+          return '<div class="feed"></div>';
       }
     })
     .join('\n');
   return `<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>${esc(doc.title)}</title><style>
 @page { size: 80mm auto; margin: 3mm; }
-body { font: 12px/1.35 'Courier New', monospace; width: 74mm; margin: 0 auto; color: #000; }
+body { font: 12px/1.45 'Courier New', monospace; width: 74mm; margin: 0 auto; color: #000; }
 p { margin: 0; } .center { text-align: center; } .right { text-align: right; } .b { font-weight: bold; }
 .big { font-size: 17px; } .inv { background: #000; color: #fff; padding: 2px 0; }
 .row { display: flex; justify-content: space-between; gap: 6px; } .row span:last-child { white-space: nowrap; }
-hr { border: 0; border-top: 1px dashed #000; margin: 5px 0; } hr.double { border-top: 3px double #000; }
+hr { border: 0; border-top: 1px dashed #000; margin: 6px 0; } hr.double { border-top: 3px double #000; } .feed { height: 6px; }
 .box { border: 2px solid #000; padding: 3px 5px; margin: 3px 0; font-weight: bold; font-size: 14px; }
 </style></head><body>${body}</body></html>`;
 };

@@ -36,6 +36,10 @@ import { prepRouter } from './routes/prep.js';
 import { clientRouter } from './routes/client.js';
 import { serviceDeskRouter } from './routes/serviceDesk.js';
 import { rulesRouter } from './routes/rules.js';
+import { setReceiptIdentityProvider } from '../src/data/receipts.js';
+import { receiptIdentity } from './routes/posCatalog.js';
+
+setReceiptIdentityProvider(receiptIdentity);
 import { cancellationsRouter } from './routes/cancellations.js';
 import { customerAccountRouter } from './routes/customerAccount.js';
 import { customersRouter } from './routes/customers.js';

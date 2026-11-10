@@ -11,6 +11,20 @@ export interface PosSettings {
   closingTime: string;
   publicAppUrl: string; // base URL printed in table QR codes, e.g. https://system.cafenoir.tn
   idleLogoutMinutes: number; // shared devices: automatic sign-out after inactivity (0 = never)
+  // Café identity printed on customer tickets (never a Wi-Fi password).
+  legalName: string;
+  address: string;
+  phone: string;
+  website: string;
+  taxId: string; // matricule fiscal
+  tradeRegister: string; // registre de commerce
+  receiptThanks: string;
+  openingHoursText: string;
+  // Caisse behaviour
+  autoPrintReceipt: boolean; // print the ticket as soon as a sale is paid
+  releaseTableAfterPayment: boolean; // free the table once its bill is fully paid
+  returnToPlanAfterSend: boolean; // back to the floor plan after "Envoyer en préparation"
+  counterNextSaleSeconds: number; // comptoir: new sale opens by itself after the success screen (0 = never)
 }
 
 export const POS_SETTING_DEFAULTS: PosSettings = {
@@ -23,4 +37,16 @@ export const POS_SETTING_DEFAULTS: PosSettings = {
   closingTime: '23:00',
   publicAppUrl: '',
   idleLogoutMinutes: 0,
+  legalName: 'Café Noir',
+  address: 'Menzah 9 — Tunis',
+  phone: '',
+  website: '',
+  taxId: '',
+  tradeRegister: '',
+  receiptThanks: 'Merci et à bientôt !',
+  openingHoursText: '',
+  autoPrintReceipt: false,
+  releaseTableAfterPayment: false,
+  returnToPlanAfterSend: true,
+  counterNextSaleSeconds: 4,
 };
