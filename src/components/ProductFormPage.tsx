@@ -137,8 +137,23 @@ export const ProductFormPage: React.FC<ProductFormPageProps> = ({
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    // Resized in the browser (square-friendly 640 px, WebP) so the caisse grid stays light.
     const reader = new FileReader();
-    reader.onload = () => updateDraft({ imageUrl: String(reader.result) });
+    reader.onload = () => {
+      const original = String(reader.result);
+      const img = new Image();
+      img.onload = () => {
+        const k = Math.min(1, 640 / Math.max(img.naturalWidth, img.naturalHeight));
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.round(img.naturalWidth * k);
+        canvas.height = Math.round(img.naturalHeight * k);
+        canvas.getContext('2d')?.drawImage(img, 0, 0, canvas.width, canvas.height);
+        const webp = canvas.toDataURL('image/webp', 0.82);
+        updateDraft({ imageUrl: webp.startsWith('data:image/webp') ? webp : canvas.toDataURL('image/jpeg', 0.85) });
+      };
+      img.onerror = () => updateDraft({ imageUrl: original });
+      img.src = original;
+    };
     reader.readAsDataURL(file);
     e.target.value = '';
   };

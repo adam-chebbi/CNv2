@@ -622,3 +622,60 @@ floorRouter.post('/visits/:id/merge', requirePermission('tables:transfer'), asyn
   emitPosEvent({ type: 'prep.changed' });
   res.json(visitDetail(getVisit(target.id)));
 }));
+
+
+// Separate part of a table (fork): chosen items go to a free table, with their own visit and bill.
+// Refused once the bill has a payment or is split; moving everything is a transfer instead.
+floorRouter.post('/visits/:id/fork', requirePermission('tables:transfer'), asyncHandler((req, res) => {
+  const body = z.object({ toTableId: z.string().min(1), lineIds: z.array(z.string().min(1)).min(1).max(200), covers: z.number().int().min(1).max(100).nullable().optional() }).parse(req.body);
+  const user = req.user!;
+  const source = getVisit(req.params.id);
+  if (source.status !== 'open') throw new ApiError(409, 'Cette visite est clôturée.');
+  assertTableAccess(user, source.table_id);
+  assertTableAccess(user, body.toTableId);
+  const to = getTable(body.toTableId);
+  if (to.archived_at) throw notFound('Table');
+  if (db.prepare("SELECT 1 FROM visits WHERE table_id = ? AND status = 'open'").get(to.id)) throw new ApiError(409, `La table ${to.name} est occupée : choisissez une table libre.`);
+  const sale = db.prepare("SELECT id, paid_mil FROM pos_sales WHERE visit_id = ? AND status = 'open'").get(source.id) as { id: string; paid_mil: number } | undefined;
+  if (!sale) throw new ApiError(409, 'Aucune addition ouverte sur cette table.');
+  if (sale.paid_mil > 0) throw new ApiError(409, 'L’addition a déjà un règlement : séparez avec « Partager l’addition ».');
+  if (db.prepare('SELECT 1 FROM sale_splits WHERE sale_id = ?').get(sale.id)) throw new ApiError(409, 'L’addition est déjà partagée.');
+  const active = db
+    .prepare("SELECT l.id FROM pos_order_lines l JOIN pos_orders o ON o.id = l.order_id WHERE o.sale_id = ? AND o.status = 'validated' AND l.status = 'active'")
+    .all(sale.id) as { id: string }[];
+  const activeIds = new Set(active.map((l) => l.id));
+  const chosen = [...new Set(body.lineIds)];
+  if (chosen.some((id) => !activeIds.has(id))) throw new ApiError(400, 'Un des articles ne fait plus partie de l’addition.');
+  if (chosen.length === activeIds.size) throw new ApiError(400, 'Tous les articles sont choisis : utilisez « Déplacer ».');
+  const from = getTable(source.table_id);
+  const created = db.transaction(() => {
+    const by = actorOf(user);
+    const visit = openVisit(to.id, body.covers ?? null, by);
+    if (source.primary_waiter_id) db.prepare('UPDATE visits SET primary_waiter_id = ?, primary_waiter_name = ? WHERE id = ?').run(source.primary_waiter_id, source.primary_waiter_name, visit.id);
+    const newSale = openSaleForVisit(visit.id, by);
+    const order = createOrder({ channel: 'staff', serviceType: 'dine_in', visitId: visit.id, saleId: newSale.id, status: 'validated', note: `Séparée de ${from.name}`, cart: { lines: [] } as unknown as Parameters<typeof createOrder>[0]['cart'], createdBy: by });
+    const now = new Date().toISOString();
+    db.prepare('UPDATE pos_orders SET validated_by_id = ?, validated_by = ?, validated_at = ? WHERE id = ?').run(user.id, user.fullName, now, order.id);
+    const move = db.prepare('UPDATE pos_order_lines SET order_id = ? WHERE id = ?');
+    chosen.forEach((id) => move.run(order.id, id));
+    recomputeSale(sale.id);
+    recomputeSale(newSale.id);
+    recordActivity('Salle', 'Séparation de table', `${from.name} → ${to.name} (${chosen.length} article(s))`, user.fullName, { userId: user.id, entityType: 'visit', entityId: visit.id, before: { table: from.name, lines: chosen }, after: { table: to.name } });
+    return visit;
+  })();
+  emitPosEvent({ type: 'floor.changed' });
+  emitPosEvent({ type: 'prep.changed' });
+  res.status(201).json(visitDetail(getVisit(created.id)));
+}));
+
+// The best sellers of the last 30 days, for the "Favoris" tab of the Caisse.
+floorRouter.get('/favorites', requireAnyPermission('pos:sell', 'orders:take'), asyncHandler((_req, res) => {
+  const since = new Date(Date.now() - 30 * 86_400_000).toISOString();
+  const rows = db
+    .prepare(
+      `SELECT l.article_id, SUM(l.quantity) AS qty FROM pos_order_lines l JOIN pos_orders o ON o.id = l.order_id
+       WHERE o.status = 'validated' AND l.status = 'active' AND o.created_at >= ? GROUP BY l.article_id ORDER BY qty DESC LIMIT 12`
+    )
+    .all(since) as { article_id: string }[];
+  res.json(rows.map((r) => r.article_id));
+}));

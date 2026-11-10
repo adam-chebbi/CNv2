@@ -95,6 +95,15 @@ clientRouter.get('/menu', asyncHandler((_req, res) => {
   });
 }));
 
+// Product photo (public, like the menu). Long cache: the URL changes when the photo changes.
+clientRouter.get('/images/:articleId', asyncHandler((req, res) => {
+  const row = db.prepare('SELECT image_url FROM catalog_articles WHERE id = ?').get(req.params.articleId) as { image_url: string | null } | undefined;
+  const m = row?.image_url?.match(/^data:(image\/(?:png|jpeg|webp|gif));base64,(.+)$/);
+  if (!m) throw notFound('Image');
+  res.set('Cache-Control', 'public, max-age=31536000, immutable');
+  res.type(m[1]).send(Buffer.from(m[2], 'base64'));
+}));
+
 clientRouter.get('/faq', asyncHandler((_req, res) => {
   const rows = db.prepare('SELECT id, question, answer, article_id FROM faq_entries WHERE published = 1 ORDER BY sort, updated_at').all() as {
     id: string;

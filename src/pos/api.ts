@@ -79,7 +79,7 @@ export const posApi = {
     return apiGet<SaleSummary[]>(`/pos/sales?${params}`);
   },
   print: (saleId: string) => apiPost<{ duplicate: boolean; duplicateNumber: number; queued: boolean; sale: SaleDetail }>(`/pos/sales/${saleId}/print`),
-  printBill: (saleId: string, registerId: string | null, sessionId: string | null) => apiPost<{ queued: boolean }>(`/pos/sales/${saleId}/print-bill`, { registerId, sessionId }),
+  printBill: (saleId: string, registerId: string | null, sessionId: string | null) => apiPost<{ queued: boolean; document?: import('../data/receipts').PrintDocument }>(`/pos/sales/${saleId}/print-bill`, { registerId, sessionId }),
   reprintPrepTicket: (prepTicketId: string) => apiPost<{ queued: boolean; document: import('../data/receipts').PrintDocument }>(`/pos/prep-tickets/${prepTicketId}/reprint`),
   printStatus: () => apiGet<{ configured: boolean; failed: number; stuck: number; offline: string[] }>('/pos/print-status'),
   publishDisplay: (registerId: string, state: Record<string, unknown>) => apiPost(`/pos/registers/${registerId}/display`, state),
@@ -140,6 +140,8 @@ export const posApi = {
   closeVisit: (visitId: string) => apiPost<VisitDetail>(`/pos/visits/${visitId}/close`),
   transferVisit: (visitId: string, toTableId: string) => apiPost<VisitDetail>(`/pos/visits/${visitId}/transfer`, { toTableId }),
   mergeVisit: (visitId: string, intoVisitId: string) => apiPost<VisitDetail>(`/pos/visits/${visitId}/merge`, { intoVisitId }),
+  forkVisit: (visitId: string, toTableId: string, lineIds: string[], covers?: number | null) => apiPost<VisitDetail>(`/pos/visits/${visitId}/fork`, { toTableId, lineIds, covers: covers ?? null }),
+  favorites: () => apiGet<string[]>('/pos/favorites'),
   staffOrder: (visitId: string, lines: (CartLineInput & { hold?: boolean })[], key: string, urgent = false) =>
     apiPostOnce<VisitDetail>(`/pos/visits/${visitId}/orders`, { lines, urgent }, key),
   acceptOrder: (orderId: string) => apiPost<Order>(`/pos/orders/${orderId}/accept`),

@@ -61,6 +61,14 @@ const variantsOf = (row: ArticleRow): { label?: string; options: VariantOption[]
   return group ? { label: group.label, options: group.options } : { options: [] };
 };
 
+// Photos uploaded from the product form are stored as data URLs; screens get a short cached URL
+// instead (the version changes with the photo), so the catalogue stays light on tablets.
+export const imageUrlOf = (id: string, stored: string | null): string | undefined => {
+  if (!stored) return undefined;
+  if (!stored.startsWith('data:')) return stored;
+  return `/api/client/images/${id}?v=${stored.length.toString(36)}${stored.slice(-8).replace(/[^a-zA-Z0-9]/g, '')}`;
+};
+
 export const toPricedArticle = (row: ArticleRow): PricedArticle => {
   const variants = variantsOf(row);
   const vatInput = { price: row.price, vatRate: row.vat_rate ?? undefined, priceIncludesTax: row.price_includes_tax === null ? undefined : row.price_includes_tax === 1 };
@@ -70,7 +78,7 @@ export const toPricedArticle = (row: ArticleRow): PricedArticle => {
     category: row.category,
     subCategory: row.sub_category ?? undefined,
     description: row.description ?? undefined,
-    imageUrl: row.image_url ?? undefined,
+    imageUrl: imageUrlOf(row.id, row.image_url),
     unitPriceMil: toMillimes(getArticleTtcPrice(vatInput)),
     vatRate: getArticleVatRate(vatInput),
     availability: asAvailability(row.availability),
