@@ -1,5 +1,5 @@
 import React, { useMemo, useState, type RefObject } from 'react';
-import { Minus, Plus, Search, ShoppingCart, Trash2 } from 'lucide-react';
+import { Minus, Plus, Search, ShoppingCart, Star, Trash2 } from 'lucide-react';
 import type { CartLineInput, PricedArticle, PricingCatalog } from '../data/pricing';
 import { priceLine } from '../data/pricing';
 import type { PosCatalog } from './api';
@@ -117,6 +117,20 @@ export const OptionPicker: React.FC<{ article: PricedArticle; catalog: PricingCa
   );
 };
 
+// Accent-free match, so "cafe creme" finds "Café crème".
+const fold = (t: string) => t.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+
+// A product without photo shows its initials on its family's colour.
+const FAMILY_TONES = ['#f5e6d3', '#e3f1e8', '#e6eefb', '#fbe7e7', '#efe7fb', '#fdf1d8', '#e2f3f5', '#f1ece4'];
+const toneOf = (key: string) => FAMILY_TONES[[...key].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7) % FAMILY_TONES.length];
+const initials = (name: string) =>
+  name
+    .split(/\s+/)
+    .filter((w) => w.length > 2 || /^[A-Z0-9]/.test(w))
+    .slice(0, 2)
+    .map((w) => w[0]?.toUpperCase() ?? '')
+    .join('') || name.slice(0, 2).toUpperCase();
+
 export const ProductGrid: React.FC<{
   catalog: PosCatalog;
   onAdd: (line: CartLineInput) => void;
@@ -125,83 +139,117 @@ export const ProductGrid: React.FC<{
   searchRef?: RefObject<HTMLInputElement | null>;
   // Quantity of each product already in the ticket, shown on its tile.
   counts?: Map<string, number>;
-}> = ({ catalog, onAdd, allowInstruction = true, onLongPress, searchRef, counts }) => {
+  // Caisse: fills its box, only the product list scrolls; photo cards; "Favoris" tab.
+  fill?: boolean;
+  favorites?: string[];
+  // Quantity typed on the keyboard before tapping a product ("3" then Croissant).
+  pendingQty?: number;
+}> = ({ catalog, onAdd, allowInstruction = true, onLongPress, searchRef, counts, fill, favorites, pendingQty }) => {
   const pricing = useMemo(() => toPricingCatalog(catalog), [catalog]);
-  const [category, setCategory] = useState<string>('');
+  const favs = useMemo(() => (favorites ?? []).filter((id) => catalog.articles.some((a) => a.id === id && a.availability !== 'hidden')), [favorites, catalog]);
+  const [category, setCategory] = useState<string>(() => (fill && favs.length > 0 ? '__fav' : ''));
   const [query, setQuery] = useState('');
   const [picking, setPicking] = useState<PricedArticle | null>(null);
   const categories = catalog.categories.filter((c) => catalog.articles.some((a) => a.category === c));
-  const q = query.trim().toLowerCase();
-  const visible = catalog.articles.filter((a) => (q ? a.name.toLowerCase().includes(q) : !category || a.category === category));
+  const q = fold(query.trim());
+  const visible = q
+    ? catalog.articles.filter((a) => fold(a.name).includes(q))
+    : category === '__fav'
+      ? favs.map((id) => catalog.articles.find((a) => a.id === id)!).filter(Boolean)
+      : catalog.articles.filter((a) => !category || a.category === category);
 
   const choose = (a: PricedArticle) => {
     if (a.availability !== 'available') return;
+    const quantity = Math.max(1, pendingQty ?? 1);
     // Products without options go straight to the cart; the others open the option picker.
-    if (a.variants.length === 0 && a.extraIds.length === 0) onAdd({ articleId: a.id, quantity: 1 });
+    if (a.variants.length === 0 && a.extraIds.length === 0) onAdd({ articleId: a.id, quantity });
     else setPicking(a);
   };
 
+  const chip = (id: string, label: React.ReactNode) => (
+    <button
+      key={id}
+      onClick={() => {
+        setCategory(id);
+        setQuery('');
+      }}
+      className={cx('shrink-0 px-4 min-h-[44px] rounded-full text-sm font-semibold border', category === id && !q ? 'bg-emerald-600 text-white border-emerald-600' : 'border-gray-200 bg-white')}
+    >
+      {label}
+    </button>
+  );
+
   return (
-    <div className="space-y-3">
-      <div className="relative">
-        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-        <input
-          ref={searchRef}
-          className={cx(inputCls, 'pl-9')}
-          placeholder={searchRef ? 'Rechercher un produit…  (F2)' : 'Rechercher un produit…'}
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          onKeyDown={(e) => {
-            // Enter adds the only match, Escape clears the search.
-            if (e.key === 'Enter' && visible.length === 1) {
-              choose(visible[0]);
-              setQuery('');
-            }
-            if (e.key === 'Escape') setQuery('');
-          }}
-        />
-      </div>
-      {!q && (
-        <div className="flex gap-2 overflow-x-auto pb-1">
-          <button onClick={() => setCategory('')} className={cx('shrink-0 px-3 min-h-[40px] rounded-full text-sm font-semibold border', !category ? 'bg-emerald-600 text-white border-emerald-600' : 'border-gray-200')}>
-            Tout
-          </button>
-          {categories.map((c) => (
-            <button key={c} onClick={() => setCategory(c)} className={cx('shrink-0 px-3 min-h-[40px] rounded-full text-sm font-semibold border', category === c ? 'bg-emerald-600 text-white border-emerald-600' : 'border-gray-200')}>
-              {c}
-            </button>
-          ))}
-        </div>
-      )}
-      <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-2">
-        {visible.map((a) => (
-          <button
-            key={a.id}
-            onClick={() => choose(a)}
-            onContextMenu={(e) => {
-              if (onLongPress) {
-                e.preventDefault();
-                onLongPress(a);
+    <div className={cx(fill ? 'flex flex-col h-full min-h-0 gap-2' : 'space-y-3')}>
+      <div className={cx(fill && 'flex flex-col gap-2 shrink-0')}>
+        <div className="relative">
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input
+            ref={searchRef}
+            className={cx(inputCls, 'pl-9')}
+            placeholder={searchRef ? 'Rechercher un produit…  (F2)' : 'Rechercher un produit…'}
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => {
+              // Enter adds the only match, Escape clears the search.
+              if (e.key === 'Enter' && visible.length === 1) {
+                choose(visible[0]);
+                setQuery('');
               }
+              if (e.key === 'Escape') setQuery('');
             }}
-            className={cx(
-              'relative min-h-[84px] rounded-xl border p-3 text-left transition active:scale-[0.98]',
-              a.availability !== 'available'
-                ? 'border-gray-100 bg-gray-50 text-gray-400 cursor-not-allowed'
-                : counts?.get(a.id)
-                  ? 'border-emerald-500 bg-emerald-50/60 hover:border-emerald-600'
-                  : 'border-gray-200 bg-white hover:border-emerald-400'
-            )}
-          >
-            <span className="block text-sm font-semibold leading-tight pr-7">{a.name}</span>
-            <span className={cx('block mt-1', a.availability === 'available' ? 'text-sm font-bold text-emerald-700' : 'text-xs')}>{a.availability === 'available' ? <Money mil={a.unitPriceMil} /> : 'Épuisé'}</span>
-            {counts?.get(a.id) ? (
-              <span className="absolute top-2 right-2 min-w-[24px] h-6 px-1.5 rounded-full bg-emerald-600 text-white text-xs font-bold flex items-center justify-center" aria-label={`${counts.get(a.id)} dans le ticket`}>
-                {counts.get(a.id)}
-              </span>
-            ) : null}
-          </button>
-        ))}
+          />
+        </div>
+        <div className={cx('flex gap-2 overflow-x-auto pb-1', q && 'opacity-40')}>
+          {fill && favs.length > 0 && chip('__fav', <span className="inline-flex items-center gap-1.5"><Star size={14} /> Favoris</span>)}
+          {chip('', 'Tout')}
+          {categories.map((c) => chip(c, c))}
+        </div>
+      </div>
+      <div className={cx(fill && 'flex-1 min-h-0 overflow-y-auto overscroll-contain -mx-1 px-1 pb-2')}>
+        {visible.length === 0 && <p className="text-sm text-gray-400 text-center py-10">Aucun produit ne correspond.</p>}
+        <div className={cx('grid gap-2', fill ? 'grid-cols-[repeat(auto-fill,minmax(132px,1fr))]' : 'grid-cols-2 sm:grid-cols-3 xl:grid-cols-4')}>
+          {visible.map((a) => {
+            const inTicket = counts?.get(a.id) ?? 0;
+            const off = a.availability !== 'available';
+            return (
+              <button
+                key={a.id}
+                onClick={() => choose(a)}
+                onContextMenu={(e) => {
+                  if (onLongPress) {
+                    e.preventDefault();
+                    onLongPress(a);
+                  }
+                }}
+                className={cx(
+                  'relative rounded-xl border text-left transition active:scale-[0.97] overflow-hidden flex flex-col',
+                  fill ? 'min-h-[150px]' : 'min-h-[84px] p-3',
+                  off ? 'border-gray-100 bg-gray-50 text-gray-400 cursor-not-allowed' : inTicket ? 'border-emerald-500 ring-1 ring-emerald-500 bg-white' : 'border-gray-200 bg-white hover:border-emerald-400'
+                )}
+              >
+                {fill && (
+                  <span className="block aspect-[4/3] w-full shrink-0 overflow-hidden" style={a.imageUrl ? undefined : { background: toneOf(a.category) }}>
+                    {a.imageUrl ? (
+                      <img src={a.imageUrl} alt="" loading="lazy" decoding="async" className={cx('w-full h-full object-cover', off && 'grayscale opacity-60')} />
+                    ) : (
+                      <span className="w-full h-full flex items-center justify-center text-2xl font-bold text-gray-700/70">{initials(a.name)}</span>
+                    )}
+                  </span>
+                )}
+                <span className={cx('flex flex-col flex-1', fill && 'px-2.5 py-2')}>
+                  <span className="block text-sm font-semibold leading-tight line-clamp-2 pr-6">{a.name}</span>
+                  <span className={cx('block mt-auto pt-1', off ? 'text-xs font-semibold' : 'text-sm font-bold text-emerald-700')}>{off ? 'Épuisé' : <Money mil={a.unitPriceMil} />}</span>
+                </span>
+                {inTicket > 0 && (
+                  <span className="absolute top-2 right-2 min-w-[26px] h-[26px] px-1.5 rounded-full bg-emerald-600 text-white text-xs font-bold flex items-center justify-center shadow" aria-label={`${inTicket} dans le ticket`}>
+                    {inTicket}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
       </div>
       {picking && (
         <OptionPicker

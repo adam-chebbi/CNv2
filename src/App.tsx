@@ -172,6 +172,21 @@ export default function App() {
   // only reopens as an overlay (header button or Alt+M). Leaving the Caisse restores it.
   const { hasPermission: canAccess } = useAuth();
   const registerMode = activeTab === 'pos' && (activeSubItem === 'pos_register' || (!activeSubItem && canAccess('pos:sell')));
+  // The full-screen Caisse asks for the menu (its ☰ button) or another screen (notifications).
+  useEffect(() => {
+    const openMenu = () => setSidebarOpen(true);
+    const openPos = (e: Event) => {
+      setActiveTab('pos');
+      setActiveSubItem((e as CustomEvent<string>).detail ?? '');
+    };
+    window.addEventListener('cn:open-menu', openMenu);
+    window.addEventListener('cn:open-pos', openPos);
+    return () => {
+      window.removeEventListener('cn:open-menu', openMenu);
+      window.removeEventListener('cn:open-pos', openPos);
+    };
+  }, [setActiveTab, setActiveSubItem]);
+
   useEffect(() => {
     setSidebarOpen(false);
     if (!registerMode) return;

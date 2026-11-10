@@ -122,6 +122,12 @@ export const PosModule: React.FC<{ subId: string; section?: string }> = ({ subId
   useEffect(() => {
     setHelpOpen(Boolean(SCREEN_HELP[def.id]) && can(def) && !helpSeen(def.id));
   }, [def.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Full-screen screens (the Caisse) have their own "Aide" button.
+  useEffect(() => {
+    const open = () => setHelpOpen(true);
+    window.addEventListener('cn:open-help', open);
+    return () => window.removeEventListener('cn:open-help', open);
+  }, []);
   if (!can(def)) {
     return (
       <div className="p-6 rounded-2xl bg-amber-50 border border-amber-200 text-sm text-amber-800 flex items-center gap-2">

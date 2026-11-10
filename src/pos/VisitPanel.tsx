@@ -121,7 +121,7 @@ const CancelRequestModal: React.FC<{ target: { type: 'line' | 'order' | 'visit';
   );
 };
 
-const PendingOrder: React.FC<{ order: Order; onChanged: () => void }> = ({ order, onChanged }) => {
+export const PendingOrder: React.FC<{ order: Order; onChanged: () => void }> = ({ order, onChanged }) => {
   const [mode, setMode] = useState<'reject' | 'change' | null>(null);
   const [reason, setReason] = useState('');
   const { busy, error, run } = useAction();

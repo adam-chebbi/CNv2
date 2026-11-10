@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { BadgePercent, Banknote, CreditCard, Gift, Printer, Split, Ticket, UserRound } from 'lucide-react';
+import { BadgePercent, Banknote, Check, CreditCard, Gift, Printer, Split, Ticket, UserRound } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 import { changeDue } from '../data/pricing';
 import { CASH_STEP_MILLIMES, formatDt, parseDtInput } from '../data/money';
@@ -169,7 +169,19 @@ const DiscountBox: React.FC<{ sale: SaleDetail; onChange: (s: SaleDetail) => voi
   );
 };
 
-export const PaymentPanel: React.FC<{ sale: SaleDetail; sessionId: string | null; registerId?: string | null; onClose: () => void; onUpdated?: (s: SaleDetail) => void }> = ({ sale: initial, sessionId, registerId, onClose, onUpdated }) => {
+export const PaymentPanel: React.FC<{
+  sale: SaleDetail;
+  sessionId: string | null;
+  registerId?: string | null;
+  onClose: () => void;
+  onUpdated?: (s: SaleDetail) => void;
+  // Caisse: called once when the bill is fully paid; ticket printed and window closed by itself.
+  onSettled?: (s: SaleDetail) => void;
+  autoPrint?: boolean;
+  autoCloseSeconds?: number;
+  closeLabel?: string;
+  onBackToPlan?: () => void;
+}> = ({ sale: initial, sessionId, registerId, onClose, onUpdated, onSettled, autoPrint, autoCloseSeconds = 0, closeLabel = 'Nouvelle vente', onBackToPlan }) => {
   const { hasPermission } = useAuth();
   const [sale, setSale] = useState(initial);
   const [method, setMethod] = useState<PaymentMethod>('cash');
@@ -235,6 +247,26 @@ export const PaymentPanel: React.FC<{ sale: SaleDetail; sessionId: string | null
     });
 
   const lines = sale.orders.filter((o) => o.status === 'validated').flatMap((o) => o.lines.filter((l) => l.status === 'active'));
+
+  // Fully paid: settle hook, automatic ticket, then the next sale opens by itself (comptoir).
+  const [countdown, setCountdown] = useState<number | null>(null);
+  const settledOnce = useRef(initial.status === 'completed');
+  useEffect(() => {
+    if (sale.status !== 'completed' || settledOnce.current) return;
+    settledOnce.current = true;
+    onSettled?.(sale);
+    if (autoPrint && !printed) void print();
+    if (autoCloseSeconds > 0) setCountdown(autoCloseSeconds);
+  }, [sale.status]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (countdown === null) return;
+    if (countdown <= 0) {
+      onClose();
+      return;
+    }
+    const t = window.setTimeout(() => setCountdown((c) => (c === null ? null : c - 1)), 1000);
+    return () => window.clearTimeout(t);
+  }, [countdown]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Keyboard: F9 cash at the exact amount, Entrée encaisser, F10 print / reprint the ticket.
   const keys = useRef({ pay, print, cashExact: () => undefined as unknown });
@@ -317,16 +349,24 @@ export const PaymentPanel: React.FC<{ sale: SaleDetail; sessionId: string | null
         <div className="space-y-3">
           {sale.status === 'completed' ? (
             <div className="space-y-3 text-center py-4">
-              <p className="text-emerald-700 font-bold text-lg">Vente réglée</p>
+              <span className="mx-auto w-16 h-16 rounded-full bg-emerald-600 text-white flex items-center justify-center"><Check size={34} strokeWidth={3} /></span>
+              <p className="text-emerald-700 font-bold text-xl">Vente réglée</p>
+              {sale.ticketNumber && <p className="text-sm text-gray-500">Ticket {sale.ticketNumber}</p>}
               {lastChange !== null && lastChange > 0 && (
-                <p className="text-2xl font-bold">
-                  Monnaie à rendre : <Money mil={lastChange} />
-                </p>
+                <div className="rounded-2xl bg-amber-50 border border-amber-200 py-3">
+                  <p className="text-sm font-semibold text-amber-800">Monnaie à rendre</p>
+                  <p className="text-5xl font-extrabold text-amber-900 tabular-nums"><Money mil={lastChange} /></p>
+                </div>
               )}
+              {sale.pickupNumber ? <p className="text-lg font-bold">Retrait n° {sale.pickupNumber}</p> : null}
+              {countdown !== null && <p className="text-xs text-gray-400">Nouvelle vente dans {countdown} s</p>}
               <Btn variant="primary" size="lg" onClick={print} busy={busy} disabled={printed && !hasPermission('pos:reprint')}>
                 <Printer size={18} /> {printed ? 'Réimprimer (duplicata)' : 'Imprimer le ticket'}
               </Btn>
-              <Btn size="lg" onClick={onClose}>Nouvelle vente</Btn>
+              <div className="flex flex-wrap justify-center gap-2">
+                <Btn size="lg" variant="primary" onClick={onClose}>{closeLabel}</Btn>
+                {onBackToPlan && <Btn size="lg" onClick={onBackToPlan}>Plan de salle</Btn>}
+              </div>
             </div>
           ) : parts.length > 0 ? (
             <SplitPayView sale={sale} parts={parts} sessionId={sessionId} onParts={setParts} onSale={update} />
@@ -376,7 +416,7 @@ export const PaymentPanel: React.FC<{ sale: SaleDetail; sessionId: string | null
               <p className="text-[11px] text-gray-400 hidden lg:block">Raccourcis : F9 espèces au montant exact · Entrée encaisser · F10 imprimer le ticket.</p>
               <div className="flex flex-wrap gap-2">
                 {hasPermission('pos:discount') && <DiscountBox sale={sale} onChange={update} />}
-                <Btn size="sm" busy={busy} onClick={() => run(async () => { const r = await posApi.printBill(sale.id, registerId ?? null, sessionId); if (!r.queued) await printBill(sale); })}>
+                <Btn size="sm" busy={busy} onClick={() => run(async () => { const r = await posApi.printBill(sale.id, registerId ?? null, sessionId); if (!r.queued) await printBill(sale, r.document); })}>
                   <Printer size={14} /> Imprimer l'addition
                 </Btn>
                 {sale.paidMil === 0 && sale.totalMil > 0 && hasPermission('pos:collect') && (

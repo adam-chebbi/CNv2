@@ -10,14 +10,21 @@ export interface ScreenHelp {
 
 export const SCREEN_HELP: Record<string, ScreenHelp> = {
   pos_register: {
-    goal: 'Encaisser une vente au comptoir ou à emporter.',
+    goal: 'Servir les tables et vendre au comptoir, depuis le plan de la salle.',
     steps: [
-      "Si la caisse est fermée, appuyez sur « Ouvrir la caisse » et comptez le fond de caisse.",
-      'Touchez les articles pour les ajouter au ticket. Touchez une ligne pour changer la quantité ou ajouter une remarque.',
-      'Appuyez sur le grand bouton vert « Encaisser ». Espèces est déjà choisi : touchez le montant reçu (ou « Montant exact »), puis « Encaisser ».',
-      'La monnaie à rendre s’affiche en grand. Imprimez le ticket puis « Nouvelle vente ».',
+      'La caisse s’ouvre sur le plan. Changez d’étage ou de terrasse avec les boutons du haut.',
+      'Table libre (verte) : touchez-la, choisissez le nombre de personnes. Table occupée : touchez-la pour voir et compléter sa commande.',
+      'Vente à emporter : touchez le grand bouton « Comptoir ».',
+      'Touchez les photos des produits pour les ajouter. Pour une table, « Envoyer en préparation » ; pour encaisser, le grand bouton vert « Encaisser ».',
+      'Espèces est déjà choisi : touchez le montant reçu (ou « Montant exact »), puis « Encaisser ». La monnaie à rendre s’affiche en très grand.',
     ],
-    tips: ['Un client veut payer en plusieurs fois ? Utilisez « Partager l’addition » dans l’écran de paiement.', 'En fin de service : « Clôturer » et comptez le tiroir.', 'Au clavier : F2 rechercher, F8 encaisser, F9 espèces au montant exact, F10 imprimer, Alt+M ouvrir le menu.', 'La vente en cours est gardée si la page se recharge.'],
+    tips: [
+      'Appui long sur une table occupée (ou « ⋯ ») : déplacer, fusionner, séparer des articles, libérer la table.',
+      '« Partager » sur une table : payer par articles, en parts égales ou par montants.',
+      'Au clavier : F1 plan, F2 rechercher, F3 comptoir, F8 encaisser, F9 espèces au montant exact, F10 imprimer. Tapez un chiffre puis un produit pour en ajouter plusieurs.',
+      'Le bouton « Plein écran » en haut à droite cache la barre du navigateur sur la tablette.',
+      'Fin de service : bouton de la session en haut → « Clôturer », puis comptez le tiroir.',
+    ],
   },
   pos_floor: {
     goal: 'Voir les tables et servir en salle.',

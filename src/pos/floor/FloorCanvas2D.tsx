@@ -38,12 +38,17 @@ interface Props {
   onDropItem?: (data: DropData, at: { x: number; y: number }, target: Selection) => void;
   // Thumbnails of 3D models (by asset id), drawn inside their footprint.
   modelThumbs?: Record<string, string>;
+  // Caisse: the plan always fits its box — no zoom, no pan, no zoom buttons.
+  fixed?: boolean;
+  // Long press on a table (table menu), as an alternative to a "⋯" button.
+  onTableLongPress?: (id: string) => void;
 }
 
 const DEFAULT_LOOK: TableLook = { fill: '#f5efe6', stroke: '#8b6b4a' };
 const MARGIN = 60;
 
-export const FloorCanvas2D: React.FC<Props> = ({ geometry, tables, elements, assets, look, onTable, editable, selection, onSelect, onMove, showBackground = editable, grid = 10, className, onDropItem, modelThumbs }) => {
+export const FloorCanvas2D: React.FC<Props> = ({ geometry, tables, elements, assets, look, onTable, editable, selection, onSelect, onMove, showBackground = editable, grid = 10, className, onDropItem, modelThumbs, fixed, onTableLongPress }) => {
+  const press = useRef<{ timer: number; fired: boolean } | null>(null);
   const [dropping, setDropping] = useState(false);
   const svgRef = useRef<SVGSVGElement>(null);
   const fit = useMemo(() => ({ x: -MARGIN, y: -MARGIN, w: geometry.widthCm + MARGIN * 2, h: geometry.depthCm + MARGIN * 2 }), [geometry.widthCm, geometry.depthCm]);
@@ -70,7 +75,7 @@ export const FloorCanvas2D: React.FC<Props> = ({ geometry, tables, elements, ass
 
   useEffect(() => {
     const svg = svgRef.current;
-    if (!svg) return;
+    if (!svg || fixed) return;
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
       zoom(e.deltaY > 0 ? 1.12 : 1 / 1.12, toPlan(e));
@@ -88,6 +93,7 @@ export const FloorCanvas2D: React.FC<Props> = ({ geometry, tables, elements, ass
   };
   const onPointerDown = (e: React.PointerEvent) => {
     if (editable) onSelect?.(null);
+    if (fixed) return;
     drag.current = { kind: 'pan', start: { x: e.clientX, y: e.clientY }, origin: { x: view.x, y: view.y }, moved: false };
     (e.currentTarget as Element).setPointerCapture?.(e.pointerId);
   };
@@ -218,9 +224,25 @@ export const FloorCanvas2D: React.FC<Props> = ({ geometry, tables, elements, ass
         data-sel={`table:${t.id}`}
         transform={`translate(${cx} ${cy})`}
         opacity={l.dim ? 0.45 : 1}
-        onPointerDown={(e) => startItem(e, { type: 'table', id: t.id }, { x: t.x, y: t.y })}
+        onPointerDown={(e) => {
+          startItem(e, { type: 'table', id: t.id }, { x: t.x, y: t.y });
+          if (!editable && onTableLongPress) {
+            const p = { timer: 0, fired: false };
+            p.timer = window.setTimeout(() => {
+              p.fired = true;
+              onTableLongPress(t.id);
+            }, 550);
+            press.current = p;
+          }
+        }}
+        onPointerUp={() => press.current && window.clearTimeout(press.current.timer)}
+        onPointerLeave={() => press.current && window.clearTimeout(press.current.timer)}
         onClick={(e) => {
           e.stopPropagation();
+          if (press.current?.fired) {
+            press.current = null;
+            return;
+          }
           if (!editable) onTable?.(t.id);
         }}
         style={{ cursor: editable ? 'move' : 'pointer' }}
@@ -311,7 +333,7 @@ export const FloorCanvas2D: React.FC<Props> = ({ geometry, tables, elements, ass
         {elementShapes.filter((_, i) => elements[i].kind !== 'zone')}
         {tableShapes}
       </svg>
-      <div className="absolute right-2 bottom-2 flex flex-col gap-1">
+      <div className={`absolute right-2 bottom-2 flex flex-col gap-1 ${fixed ? 'hidden' : ''}`}>
         <button type="button" onClick={() => zoom(1 / 1.25)} className="w-9 h-9 rounded-lg bg-white/90 shadow border border-gray-200 flex items-center justify-center" aria-label="Zoomer">
           <Plus size={16} />
         </button>

@@ -23,7 +23,7 @@ const readView = (): '2d' | '3d' => {
   }
 };
 
-type TableState = 'free' | 'busy' | 'reserved' | 'pending' | 'call' | 'bill' | 'locked';
+export type TableState = 'free' | 'busy' | 'reserved' | 'pending' | 'call' | 'bill' | 'locked';
 
 export const tableState = (t: LiveTable): TableState => {
   if (!t.accessible) return 'locked';
@@ -35,7 +35,7 @@ export const tableState = (t: LiveTable): TableState => {
   return 'free';
 };
 
-const COLORS: Record<TableState, { fill: string; stroke: string; halo: string | null }> = {
+export const COLORS: Record<TableState, { fill: string; stroke: string; halo: string | null }> = {
   free: { fill: '#ecfdf5', stroke: '#34d399', halo: null },
   busy: { fill: '#e0f2fe', stroke: '#0ea5e9', halo: '#0ea5e9' },
   reserved: { fill: '#ede9fe', stroke: '#8b5cf6', halo: '#8b5cf6' },
@@ -45,7 +45,7 @@ const COLORS: Record<TableState, { fill: string; stroke: string; halo: string | 
   locked: { fill: '#f3f4f6', stroke: '#d1d5db', halo: null },
 };
 
-const STYLE: Record<TableState, { cls: string; label: string }> = {
+export const STYLE: Record<TableState, { cls: string; label: string }> = {
   free: { cls: 'bg-emerald-50 border-emerald-400 text-emerald-900', label: 'Libre' },
   busy: { cls: 'bg-sky-100 border-sky-500 text-sky-900', label: 'Occupée' },
   reserved: { cls: 'bg-violet-100 border-violet-500 text-violet-900', label: 'Réservée bientôt' },
